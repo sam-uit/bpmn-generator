@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Local configuration (copy from config.example.yaml)
+config.yaml
+
+# Logs
+logs/
+
+# Soft-deleted files (move here instead of deleting)
+_trash/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# --- typst-bpmn ------------------------------------------------------------
+# Source models and reference renders: inputs, not code
+samples/
+plan.md
+
+# Converted models: build products of tools/bpmn2yaml.py
+models/
+
+# Render output
+out/
+out*/
+*.pdf
+*.png
+*.svg
+
+# Vendored binaries
+*.whl
+*.ttf
+*.otf

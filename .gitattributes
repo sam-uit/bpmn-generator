@@ -1,0 +1,16 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Typst and YAML are text
+*.typ    text
+*.yaml   text
+*.yml    text
+*.bpmn   text
+*.md     text diff=markdown
+*.py     text diff=python
+
+# Binary assets, if ever vendored
+*.png    binary
+*.pdf    binary
+*.ttf    binary
+*.otf    binary
