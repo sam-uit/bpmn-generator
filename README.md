@@ -30,9 +30,29 @@ thứ nó không ép được:
 | Lệnh | Việc |
 | --- | --- |
 | `bpmn-brief <ten>-brief.yaml -o <ten>.bpmn` | Sinh sơ đồ: tự phân tầng, tự bố cục, tự sửa luật sửa được |
-| `bpmn-lint <file>` | Kiểm luật cấu trúc + quy ước id. Nhận cả `.bpmn` lẫn `-brief.yaml` |
+| `bpmn-lint <file>` | Kiểm luật cấu trúc + quy ước id. Nhận cả `.bpmn` lẫn `.yaml` |
 | `bpmn-id <file> --rename --also <...>` | Đổi id hàng loạt theo quy ước, sửa luôn chỗ tham chiếu |
 | `bpmn2yaml <file>.bpmn -o <file>.yaml` | Chuyển sang YAML rút gọn cho [typst-bpmn](https://github.com/sam-uit/typst-bpmn) đọc |
+
+## Vòng làm việc
+
+Brief chỉ dùng **một lần**. Sau vòng đầu, thứ bạn sửa là file `.yaml` do `bpmn2yaml`
+sinh ra — nó quay ngược lại được vào `bpmn-brief`:
+
+```
+<ten>-brief.yaml ──► [bpmn-brief] ──► <ten>.bpmn ──► Camunda Modeler
+   (nguyên bản,                                            │
+    một lần)                                          [bpmn2yaml]
+                                                            │
+                        ┌── chưa hài lòng: sửa <ten>.yaml ──┤
+                        │                                   │
+                        └──────► [bpmn-brief] ◄─────────────┘
+```
+
+Một vòng giữ nguyên **mọi id** (node, sequence flow, message flow, data association),
+**mọi phần tử** kể cả kho dữ liệu và ghi chú, và **nhánh mặc định** của mọi cổng. Toạ độ
+thì không — mỗi lần sinh là bố cục lại, nên bước Modeler nằm *trong* vòng lặp. Toàn bộ:
+[`docs/workflow.md`](docs/workflow.md).
 
 Dùng như thư viện:
 
@@ -88,6 +108,8 @@ tiết nào *chính là đặt tên*. Nó báo `ID-LONG` và chờ bạn khai `s
 
 ## Tài liệu
 
+- [`docs/workflow.md`](docs/workflow.md) — vòng làm việc: brief một lần, `.yaml` nhiều
+  lần, cái gì giữ được qua mỗi vòng và cái gì không
 - [`docs/naming.md`](docs/naming.md) — quy ước id: khuôn, bảng từ khoá và viết tắt đầy đủ,
   và quy trình đổi tên hàng loạt
 - [`docs/rules.md`](docs/rules.md) — luật well-formed: cái gì bắt, cái gì tự sửa, và vì sao
@@ -106,6 +128,9 @@ Dùng từ một dự án khác — khai path dependency, để sửa thư việ
 [tool.uv.sources]
 bpmn-generator = { path = "../bpmn-generator", editable = true }
 ```
+
+Đường dẫn là tương đối *so với `pyproject.toml` của dự án kia*, không phải so với thư
+mục bạn đang đứng. Repo nằm sâu một tầng thì phải là `../../bpmn-generator`.
 
 ## Liên quan
 
