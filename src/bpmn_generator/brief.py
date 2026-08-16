@@ -1,0 +1,372 @@
+#!/usr/bin/env python3
+"""Sinh BPMN 2.0 (kèm BPMNDI) từ một bản mô tả YAML không có toạ độ.
+
+    python3 tools/brief.py content/processes/<ten>-brief.yaml \
+        -o content/processes/<ten>.bpmn
+
+Lược đồ của `-brief.yaml` chính là **dạng lưới** (grid form) trong `docs/schema.md`
+của typst-bpmn: giống hệt file `.yaml` lưu trữ, chỉ khác là không có `bounds`/`waypoints`.
+Nhờ vậy đọc một brief hay đọc một model đã chuyển đổi là cùng một thói quen.
+
+Khác biệt duy nhất: brief cũng **không cần** `row`/`col`. Script tự tính:
+
+  - Cột  = phân tầng theo đường dài nhất trên đồ thị dòng chảy (bỏ qua cạnh quay lui).
+  - Dòng = kế thừa dòng của bước trước; nhánh thứ hai trở đi của một gateway tụt xuống
+           dòng dưới; đụng chỗ thì đẩy tiếp xuống.
+
+Người viết vẫn thắng máy: khai `row`/`col` cho node nào thì node đó giữ nguyên.
+
+Trước khi bố cục, brief được `tools/rules.normalize()` sửa những vi phạm well-formed
+mà máy sửa được mà không cần đặt tên: chèn cổng hợp lưu, đặt nhánh mặc định. Mọi thay đổi
+đều được in ra. Tắt bằng `--no-fix`. Xem `docs/bpmn-rules.md`.
+
+Toạ độ tuyệt đối, bề rộng cột, định tuyến cạnh và BPMNDI do `build.py` lo — script
+này chỉ trả lời câu hỏi "cái gì nằm ở ô lưới nào".
+"""
+
+from __future__ import annotations
+
+import argparse
+import pathlib
+import sys
+
+
+from .build import LANE_LEFT_PAD, POOL_HEADER, Model, build
+from .rules import check, load_brief, normalize
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    sys.exit("cần PyYAML: pip install pyyaml --break-system-packages")
+
+
+# --- dạng lưới (typst-bpmn) -> tên phần tử BPMN ---------------------------------------
+TASK_KIND = {
+    "none": "task",
+    "user": "userTask",
+    "service": "serviceTask",
+    "send": "sendTask",
+    "receive": "receiveTask",
+    "manual": "manualTask",
+    "script": "scriptTask",
+    "rule": "businessRuleTask",
+    "call": "callActivity",
+}
+GATEWAY_KIND = {
+    "exclusive": "exclusiveGateway",
+    "parallel": "parallelGateway",
+    "inclusive": "inclusiveGateway",
+    "event": "eventBasedGateway",
+}
+
+
+def element_of(n: dict) -> str:
+    kind = n.get("kind", "task")
+    if kind == "task":
+        return TASK_KIND.get(n.get("task", "none"), "task")
+    if kind == "gateway":
+        return GATEWAY_KIND.get(n.get("gateway", "exclusive"), "exclusiveGateway")
+    if kind == "event":
+        ev = n.get("event", "start")
+        if ev == "start":
+            return "startEvent"
+        if ev == "end":
+            return "endEvent"
+        return "intermediateThrowEvent" if n.get("throw") else "intermediateCatchEvent"
+    raise SystemExit(f"bpmnbrief: chưa hỗ trợ kind '{kind}' (node {n.get('id')})")
+
+
+# --- phân tầng ------------------------------------------------------------------------
+def back_edges(nodes: list[str], edges: list[tuple[str, str]]) -> set[int]:
+    """Cạnh quay lui = cạnh trỏ về một node đang nằm trên ngăn xếp DFS.
+
+    Vòng lặp rework là chuyện thường trong quy trình thật; nếu đem nó vào phân tầng thì
+    không còn thứ tự nào hợp lệ. Nên tách ra, xếp chỗ theo phần còn lại, rồi vẽ nó bằng
+    cung quay lui phía dưới.
+    """
+    out: dict[str, list[tuple[int, str]]] = {n: [] for n in nodes}
+    for i, (s, t) in enumerate(edges):
+        if s in out:
+            out[s].append((i, t))
+
+    WHITE, GREY, BLACK = 0, 1, 2
+    color = {n: WHITE for n in nodes}
+    back: set[int] = set()
+
+    def visit(u: str) -> None:
+        color[u] = GREY
+        for i, v in out.get(u, ()):
+            if color.get(v, BLACK) == GREY:
+                back.add(i)
+            elif color.get(v, BLACK) == WHITE:
+                visit(v)
+        color[u] = BLACK
+
+    sys.setrecursionlimit(10000)
+    for n in nodes:
+        if color[n] == WHITE:
+            visit(n)
+    return back
+
+
+def layer(nodes: list[dict], edges: list[tuple[str, str]], back: set[int]) -> dict[str, int]:
+    """Cột = đường dài nhất tính từ một node nguồn. Node khai sẵn `col` thì giữ nguyên."""
+    ids = [n["id"] for n in nodes]
+    fixed = {n["id"]: n["col"] - 1 for n in nodes if "col" in n}
+    fwd = [(s, t) for i, (s, t) in enumerate(edges) if i not in back]
+    preds: dict[str, list[str]] = {i: [] for i in ids}
+    for s, t in fwd:
+        if t in preds and s in preds:
+            preds[t].append(s)
+
+    col: dict[str, int] = {}
+
+    def solve(u: str, seen: frozenset[str]) -> int:
+        if u in col:
+            return col[u]
+        if u in fixed:
+            col[u] = fixed[u]
+            return col[u]
+        if u in seen:
+            return 0
+        ps = preds.get(u, [])
+        c = 0 if not ps else max(solve(p, seen | {u}) for p in ps) + 1
+        col[u] = c
+        return c
+
+    for i in ids:
+        solve(i, frozenset())
+    return col
+
+
+def assign_rows(nodes: list[dict], edges: list[tuple[str, str]], back: set[int],
+                col: dict[str, int]) -> dict[str, int]:
+    """Dòng = kế thừa bước trước; nhánh thứ hai trở đi tụt xuống; đụng thì đẩy tiếp.
+
+    Thứ tự khai báo trong YAML quyết định nhánh nào giữ được dòng chính — đó là chỗ
+    người viết nói "nhánh này mới là dòng chảy chính", và máy phải nghe theo.
+    """
+    by_id = {n["id"]: n for n in nodes}
+    fwd = [(s, t) for i, (s, t) in enumerate(edges) if i not in back]
+
+    rank: dict[tuple[str, str], int] = {}
+    seen_src: dict[str, int] = {}
+    for s, t in fwd:
+        rank[(s, t)] = seen_src.get(s, 0)
+        seen_src[s] = rank[(s, t)] + 1
+
+    preds: dict[str, list[str]] = {n["id"]: [] for n in nodes}
+    for s, t in fwd:
+        if t in preds:
+            preds[t].append(s)
+
+    row: dict[str, int] = {}
+    taken: set[tuple[str, int, int]] = set()
+    order = sorted(nodes, key=lambda n: (col[n["id"]], nodes.index(n)))
+
+    for n in order:
+        nid = n["id"]
+        lane = n.get("lane", "")
+        if "row" in n:
+            row[nid] = n["row"] - 1
+            taken.add((lane, col[nid], row[nid]))
+            continue
+        ps = [p for p in preds[nid] if p in row]
+        if not ps:
+            want = 0
+        elif len(ps) > 1:
+            # Điểm hợp lưu kéo về dòng chính
+            want = min(row[p] for p in ps)
+        else:
+            p = ps[0]
+            want = row[p] + rank.get((p, nid), 0)
+        while (lane, col[nid], want) in taken:
+            want += 1
+        row[nid] = want
+        taken.add((lane, col[nid], want))
+    return row
+
+
+# --- dựng spec cho bpmnbuild -----------------------------------------------------------
+def to_spec(brief: dict, source: str) -> dict:
+    meta = brief.get("meta", {})
+    pools_in = brief.get("pools", [])
+    nodes_in = brief.get("nodes", [])
+    flows_in = brief.get("flows", [])
+
+    pools = []
+    lane_of_pool = {}
+    for p in pools_in:
+        pid = p["id"]
+        if p.get("blackbox"):
+            pools.append(dict(id=pid, name=p.get("name", pid), blackbox=True))
+            continue
+        lanes = []
+        for l in p.get("lanes", []):
+            l = dict(id=l, name=l) if isinstance(l, str) else dict(l)
+            lanes.append(dict(id=l["id"], name=l.get("name", l["id"]), rows=1))
+            lane_of_pool[l["id"]] = pid
+        pools.append(dict(
+            id=pid,
+            name=p.get("name", pid),
+            process=p.get("process", "Process_" + pid),
+            lanes=lanes,
+        ))
+
+    # Lane mặc định khi node không khai: lane đầu tiên
+    first_lane = next((l["id"] for p in pools for l in p.get("lanes", [])), None)
+    for n in nodes_in:
+        n.setdefault("lane", first_lane)
+
+    ids = [n["id"] for n in nodes_in]
+    seq = [f for f in flows_in if f.get("kind", "sequence") == "sequence"]
+    edges = [(f["source"], f["target"]) for f in seq]
+    back = back_edges(ids, edges)
+    col = layer(nodes_in, edges, back)
+    row = assign_rows(nodes_in, edges, back, col)
+
+    # Số dòng thật của mỗi lane
+    rows_per_lane: dict[str, int] = {}
+    for n in nodes_in:
+        lane = n["lane"]
+        rows_per_lane[lane] = max(rows_per_lane.get(lane, 1), row[n["id"]] + 1)
+    for p in pools:
+        for l in p.get("lanes", []):
+            l["rows"] = rows_per_lane.get(l["id"], 1)
+
+    nodes = []
+    for n in nodes_in:
+        out = dict(
+            id=n["id"],
+            name=n.get("name", ""),
+            kind=element_of(n),
+            lane=n["lane"],
+            col=col[n["id"]],
+            row=row[n["id"]],
+        )
+        if n.get("definition") and n.get("definition") != "none":
+            out["definition"] = n["definition"]
+        if n.get("color"):
+            out["color"] = n["color"]
+        if n.get("default"):
+            out["default"] = n["default"]
+        nodes.append(out)
+
+    flows = []
+    for i, f in enumerate(seq):
+        d = dict(src=f["source"], dst=f["target"])
+        if f.get("name"):
+            d["name"] = f["name"]
+        if f.get("route"):
+            d["route"] = f["route"]
+        elif edges[i] and i in back:
+            # Cung quay lui: vòng xuống dưới rồi trở về, đúng cách một modeler vẽ
+            d["route"] = "loop"
+            d["dy"] = 45
+        flows.append(d)
+
+    messages = []
+    for f in flows_in:
+        if f.get("kind") == "message":
+            m = dict(src=f["source"], dst=f["target"])
+            if f.get("name"):
+                m["name"] = f["name"]
+            if f.get("offset"):
+                m["offset"] = f["offset"]
+            messages.append(m)
+
+    return dict(
+        id=meta.get("id", "Definitions_" + pathlib.Path(source).stem.replace("-", "_")),
+        collaboration=meta.get("collaboration", "Collaboration_1"),
+        pools=pools,
+        nodes=nodes,
+        flows=flows,
+        messages=messages,
+    )
+
+
+# --- báo cáo kích thước ----------------------------------------------------------------
+def report_fit(spec: dict, text_width_mm: float = 174.0, font_units: float = 11.0) -> None:
+    """Kích thước "đủ nhìn" là một quyết định, nên phải nói ra bằng số.
+
+    Không cố ép sơ đồ nhỏ nhất hay to nhất — chỉ báo cỡ chữ sẽ in ra và gợi ý lát cắt
+    khi nó rơi xuống dưới ngưỡng đọc được (6pt).
+    """
+    m = Model(spec)
+    xs = [b["x"] for b in m.pool_bounds.values()]
+    x1 = [b["x"] + b["w"] for b in m.pool_bounds.values()]
+    ys = [b["y"] for b in m.pool_bounds.values()]
+    y1 = [b["y"] + b["h"] for b in m.pool_bounds.values()]
+    w = max(x1) - min(xs)
+    h = max(y1) - min(ys)
+    pt = font_units * (text_width_mm / w) * 72 / 25.4
+    size_at = lambda width: font_units * (text_width_mm / width) * 72 / 25.4
+    budget = font_units * (text_width_mm / 6) * 72 / 25.4  # bề rộng tối đa để còn 6pt
+
+    def verdict(width):
+        s = size_at(width)
+        return f"{s:4.1f}pt  {'đọc được' if s >= 6 else 'quá nhỏ'}"
+
+    print(f"  extent {w:.0f} x {h:.0f} (tỉ lệ {w / h:.2f})")
+    print(f"  Ở bề rộng chữ {text_width_mm:.0f}mm, ngưỡng đọc được là 6pt "
+          f"(tương ứng mô hình rộng tối đa ~{budget:.0f} đơn vị):")
+    print(f"    toàn cảnh          {w:7.0f} đv   {verdict(w)}")
+
+    # Từng lane: bề rộng thật của phần có node, chưa tính `compact` nén dải trống
+    BANDS = POOL_HEADER + 30 + 2 * LANE_LEFT_PAD
+    lanes = {}
+    for n in m.nodes.values():
+        e = lanes.setdefault(n["lane"], [1e9, -1e9, 0])
+        e[0] = min(e[0], n["x"])
+        e[1] = max(e[1], n["x"] + n["w"])
+        e[2] += 1
+    names = {l["id"]: l["name"] for p in spec["pools"] for l in p.get("lanes", [])}
+    for lane, (x0, x1, cnt) in lanes.items():
+        lw = x1 - x0 + BANDS
+        nm = names.get(lane, lane)
+        print(f"    lane {nm:<18.18} {lw:7.0f} đv   {verdict(lw)}   ({cnt} node)")
+
+    print("  (số của lane là cận trên — `compact: true` còn nén được các dải trống)")
+    if pt < 6:
+        print("  Gợi ý: cắt bằng bpmn-lane(M, \"<tên lane>\"), hoặc hẹp hơn nữa bằng")
+        print("         bpmn-part(M, (<id>, ..), lane: \"<tên lane>\") — xem docs/bpmn-workflow.md")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("brief", help="file <ten>-brief.yaml")
+    ap.add_argument("-o", "--out", help="file .bpmn xuất ra (mặc định: bỏ hậu tố -brief)")
+    ap.add_argument("--width", type=float, default=174.0, help="bề rộng chữ (mm) để báo cỡ chữ")
+    ap.add_argument("--no-fix", action="store_true",
+                    help="không tự chèn cổng hợp lưu / đặt nhánh mặc định")
+    args = ap.parse_args()
+
+    src = pathlib.Path(args.brief)
+    brief = yaml.safe_load(src.read_text(encoding="utf-8"))
+    out = args.out or str(src).replace("-brief.yaml", ".bpmn").replace("-brief.yml", ".bpmn")
+    if out == str(src):
+        return print("bpmnbrief: cần -o, tên file không có hậu tố -brief") or 1
+
+    # Sửa những vi phạm máy sửa được, trước khi bố cục — chèn cổng làm đổi đồ thị nên
+    # phải xong trước khi phân tầng.
+    if not args.no_fix:
+        brief, changes = normalize(brief)
+        for c in changes:
+            print(f"  [sửa] {c.detail}")
+
+    spec = to_spec(brief, src.name)
+    build(spec, out)
+    report_fit(spec, text_width_mm=args.width)
+
+    # Những gì còn lại là lỗi mô hình hoá, người phải sửa
+    rest = [f for f in check(load_brief(brief)) if f.level == "error"]
+    if rest:
+        print(f"  {len(rest)} lỗi còn lại (xem docs/bpmn-rules.md):")
+        for f in rest:
+            print(f"    ✗ [{f.code}] {f.node}: {f.message}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
