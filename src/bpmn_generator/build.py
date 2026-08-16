@@ -35,6 +35,12 @@ PALETTE = {
 
 EVENT_KINDS = {"startEvent", "endEvent", "intermediateCatchEvent", "intermediateThrowEvent"}
 GATEWAY_KINDS = {"exclusiveGateway", "parallelGateway", "inclusiveGateway", "eventBasedGateway"}
+DATA_KINDS = {"dataObjectReference", "dataStoreReference"}
+
+DATA_W, DATA_H = 50, 50
+NOTE_W, NOTE_H = 100, 30
+ARTIFACT_GAP = 45   # khoảng hở giữa đáy phần tử chủ và đỉnh artifact
+ARTIFACT_PITCH = 62  # hai artifact cùng một chủ thì xếp cạnh nhau
 
 
 def size_of(kind: str) -> tuple[int, int]:
@@ -42,6 +48,10 @@ def size_of(kind: str) -> tuple[int, int]:
         return EV, EV
     if kind in GATEWAY_KINDS:
         return GW, GW
+    if kind in DATA_KINDS:
+        return DATA_W, DATA_H
+    if kind == "textAnnotation":
+        return NOTE_W, NOTE_H
     return TASK_W, TASK_H
 
 
@@ -52,6 +62,8 @@ class Model:
         self.pools = spec["pools"]
         self.flows = spec.get("flows", [])
         self.messages = spec.get("messages", [])
+        self.artifacts = {a["id"]: dict(a) for a in spec.get("artifacts", [])}
+        self.links = spec.get("links", [])
         self.lane_of_pool: dict[str, str] = {}
         for p in self.pools:
             for ln in p.get("lanes", []):
@@ -106,6 +118,31 @@ class Model:
             n["cx"] = n["x"] + w / 2
             n["cy"] = n["y"] + h / 2
             n["pool"] = self.lane_of_pool[n["lane"]]
+
+        self.place_artifacts()
+
+    def place_artifacts(self) -> None:
+        """Artifact treo dưới phần tử chủ của nó.
+
+        Không đưa artifact vào lưới: chúng không có `col`/`row`, và ép chúng vào lưới
+        sẽ đẩy cả một cột ra chỗ khác chỉ vì một cái kho dữ liệu. Dưới-chủ-thể là chỗ
+        Modeler cũng đặt, và là chỗ mắt người tìm đến.
+        """
+        per_host: dict[str, int] = {}
+        for a in self.artifacts.values():
+            host = self.nodes.get(a.get("host") or "")
+            if host is None:
+                continue
+            w, h = size_of(a["kind"])
+            k = per_host.get(host["id"], 0)
+            per_host[host["id"]] = k + 1
+            a["w"], a["h"] = w, h
+            a["x"] = host["cx"] - w / 2 + k * ARTIFACT_PITCH
+            a["y"] = host["y"] + host["h"] + ARTIFACT_GAP
+            a["cx"] = a["x"] + w / 2
+            a["cy"] = a["y"] + h / 2
+            a["pool"] = host["pool"]
+            a["lane"] = a.get("lane") or host["lane"]
 
     # -- định tuyến cạnh ------------------------------------------------------
     def route(self, flow: dict) -> list[tuple[float, float]]:
@@ -219,8 +256,8 @@ class Model:
         for i, m in enumerate(self.messages, 1):
             nm = f' name="{escape(m["name"])}"' if m.get("name") else ""
             A(
-                f'    <bpmn:messageFlow id="MF_{i}"{nm} sourceRef="{m["src"]}"'
-                f' targetRef="{m["dst"]}" />'
+                f'    <bpmn:messageFlow id="{self.msg_id(m, i)}"{nm}'
+                f' sourceRef="{m["src"]}" targetRef="{m["dst"]}" />'
             )
         A("  </bpmn:collaboration>")
 
@@ -258,6 +295,17 @@ class Model:
                 if n.get("definition"):
                     d = n["definition"]
                     body.append(f'      <bpmn:{d}EventDefinition id="Def_{n["id"]}" />')
+                # Data association là con của chính activity, không phải của process —
+                # đó là lý do nó phải chèn ở đây chứ không ở vòng lặp cạnh phía dưới.
+                for lk in self.links:
+                    if lk["host"] != n["id"] or lk.get("kind") != "data":
+                        continue
+                    tag = ("dataOutputAssociation" if lk["direction"] == "output"
+                           else "dataInputAssociation")
+                    ref = "targetRef" if lk["direction"] == "output" else "sourceRef"
+                    body.append(f'      <bpmn:{tag} id="{self.link_id(lk)}">')
+                    body.append(f"        <bpmn:{ref}>{lk['art']}</bpmn:{ref}>")
+                    body.append(f"      </bpmn:{tag}>")
                 extra = ""
                 if n.get("default"):
                     extra = f' default="{n["default"]}"'
@@ -268,6 +316,17 @@ class Model:
                 else:
                     A(f'    <bpmn:{kind} id="{n["id"]}"{nm}{extra} />')
 
+            for a in self.artifacts.values():
+                if a.get("pool") != p["id"]:
+                    continue
+                if a["kind"] == "textAnnotation":
+                    A(f'    <bpmn:textAnnotation id="{a["id"]}">')
+                    A(f"      <bpmn:text>{escape(a.get('name', ''))}</bpmn:text>")
+                    A("    </bpmn:textAnnotation>")
+                else:
+                    nm = f' name="{escape(a["name"])}"' if a.get("name") else ""
+                    A(f'    <bpmn:{a["kind"]} id="{a["id"]}"{nm} />')
+
             for f in self.flows:
                 if self.nodes[f["src"]]["pool"] != p["id"]:
                     continue
@@ -275,6 +334,15 @@ class Model:
                 A(
                     f'    <bpmn:sequenceFlow id="{self.flow_id(f)}"{nm}'
                     f' sourceRef="{f["src"]}" targetRef="{f["dst"]}" />'
+                )
+            for lk in self.links:
+                if lk.get("kind") != "association":
+                    continue
+                if self.artifacts[lk["art"]].get("pool") != p["id"]:
+                    continue
+                A(
+                    f'    <bpmn:association id="{self.link_id(lk)}"'
+                    f' sourceRef="{lk["host"]}" targetRef="{lk["art"]}" />'
                 )
             A("  </bpmn:process>")
 
@@ -321,6 +389,30 @@ class Model:
                     )
                     A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNShape>")
+        for a in self.artifacts.values():
+            A(f'      <bpmndi:BPMNShape id="Shape_{a["id"]}" bpmnElement="{a["id"]}">')
+            A(self.bounds(a, 8))
+            if a["kind"] in DATA_KINDS and a.get("name"):
+                A("        <bpmndi:BPMNLabel>")
+                A(
+                    f'          <dc:Bounds x="{a["cx"] - 45:.0f}"'
+                    f' y="{a["y"] + a["h"] + 6:.0f}" width="90" height="14" />'
+                )
+                A("        </bpmndi:BPMNLabel>")
+            A("      </bpmndi:BPMNShape>")
+        for lk in self.links:
+            a, host = self.artifacts[lk["art"]], self.nodes[lk["host"]]
+            # Artifact luôn nằm dưới chủ của nó, nên hai điểm là đủ: đáy chủ, đỉnh artifact.
+            near = (host["cx"], host["y"] + host["h"])
+            far = (a["cx"], a["y"])
+            wps = [near, far] if lk["direction"] == "output" else [far, near]
+            A(
+                f'      <bpmndi:BPMNEdge id="Edge_{self.link_id(lk)}"'
+                f' bpmnElement="{self.link_id(lk)}">'
+            )
+            for (x, y) in wps:
+                A(f'        <di:waypoint x="{x:.0f}" y="{y:.0f}" />')
+            A("      </bpmndi:BPMNEdge>")
         for f in self.flows:
             wps = self.route(f)
             A(
@@ -340,7 +432,8 @@ class Model:
             A("      </bpmndi:BPMNEdge>")
         for i, m in enumerate(self.messages, 1):
             wps = self.message_route(m)
-            A(f'      <bpmndi:BPMNEdge id="Edge_MF_{i}" bpmnElement="MF_{i}">')
+            mid = self.msg_id(m, i)
+            A(f'      <bpmndi:BPMNEdge id="Edge_{mid}" bpmnElement="{mid}">')
             for (x, y) in wps:
                 A(f'        <di:waypoint x="{x:.0f}" y="{y:.0f}" />')
             if m.get("name"):
@@ -375,6 +468,14 @@ class Model:
 
     def flow_id(self, f: dict) -> str:
         return f.get("id") or f"Flow_{f['src']}__{f['dst']}"
+
+    @staticmethod
+    def msg_id(m: dict, i: int) -> str:
+        return m.get("id") or f"MF_{i}"
+
+    @staticmethod
+    def link_id(lk: dict) -> str:
+        return lk.get("id") or f"Link_{lk['host']}__{lk['art']}"
 
     @staticmethod
     def bounds(b: dict, indent: int) -> str:

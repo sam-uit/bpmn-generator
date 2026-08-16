@@ -40,3 +40,9 @@ out*/
 *.whl
 *.ttf
 *.otf
+
+# Soft-deleted files (device_bash cannot rm; move here instead)
+_to_delete/
+
+# Library, not application — resolve fresh in each consumer
+uv.lock

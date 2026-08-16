@@ -58,6 +58,17 @@ GATEWAY_KIND = {
     "inclusive": "inclusiveGateway",
     "event": "eventBasedGateway",
 }
+DATA_KIND = {
+    "object": "dataObjectReference",
+    "store": "dataStoreReference",
+    "input": "dataObjectReference",
+    "output": "dataObjectReference",
+}
+
+# Artifact = thứ được vẽ nhưng không nằm trên dòng chảy: không có token đi qua, không
+# vào `flowNodeRef`, không tham gia phân tầng. Tách riêng ngay từ đầu thì phần bố cục
+# không phải biết chúng tồn tại.
+ARTIFACT_KINDS = ("data", "annotation")
 
 
 def element_of(n: dict) -> str:
@@ -73,7 +84,17 @@ def element_of(n: dict) -> str:
         if ev == "end":
             return "endEvent"
         return "intermediateThrowEvent" if n.get("throw") else "intermediateCatchEvent"
-    raise SystemExit(f"bpmnbrief: chưa hỗ trợ kind '{kind}' (node {n.get('id')})")
+    if kind == "data":
+        return DATA_KIND.get(n.get("data", "object"), "dataObjectReference")
+    if kind == "annotation":
+        return "textAnnotation"
+    hint = {
+        "subprocess": "gỡ subprocess ra thành một mô hình riêng, hoặc giữ file .bpmn "
+                      "làm nguồn sự thật cho mô hình này",
+        "group": "bỏ group khỏi .yaml — group chỉ là khung trang trí, vẽ lại trong Modeler",
+    }.get(kind)
+    tail = f"\n  {hint}" if hint else ""
+    raise SystemExit(f"bpmn-brief: chưa hỗ trợ kind '{kind}' (node {n.get('id')}){tail}")
 
 
 # --- phân tầng ------------------------------------------------------------------------
@@ -191,14 +212,21 @@ def assign_rows(nodes: list[dict], edges: list[tuple[str, str]], back: set[int],
 def to_spec(brief: dict, source: str) -> dict:
     meta = brief.get("meta", {})
     pools_in = brief.get("pools", [])
-    nodes_in = brief.get("nodes", [])
+    all_nodes = brief.get("nodes", [])
     flows_in = brief.get("flows", [])
+
+    # Artifact ra một rổ riêng: chúng được vẽ nhưng không nằm trên dòng chảy.
+    nodes_in = [n for n in all_nodes if n.get("kind") not in ARTIFACT_KINDS]
+    artifacts_in = [n for n in all_nodes if n.get("kind") in ARTIFACT_KINDS]
 
     pools = []
     lane_of_pool = {}
     for p in pools_in:
         pid = p["id"]
-        if p.get("blackbox"):
+        # Một participant không có lane và không chứa node nào là black box — dù file
+        # nguồn không nói thẳng. Đây là chỗ `.yaml` chuyển đổi ngược quay lại được:
+        # `bpmn2yaml` không ghi `blackbox`, nó chỉ đơn giản không ghi `lanes`.
+        if p.get("blackbox") or not p.get("lanes"):
             pools.append(dict(id=pid, name=p.get("name", pid), blackbox=True))
             continue
         lanes = []
@@ -230,6 +258,14 @@ def to_spec(brief: dict, source: str) -> dict:
     for n in nodes_in:
         lane = n["lane"]
         rows_per_lane[lane] = max(rows_per_lane.get(lane, 1), row[n["id"]] + 1)
+    # Artifact treo dưới phần tử chủ, nên lane phải chừa thêm một dòng cho nó — nếu
+    # không thì cái kho dữ liệu rơi ra ngoài khung lane.
+    hosts_with_art = {f["target"] if f["source"] in {a["id"] for a in artifacts_in} else f["source"]
+                      for f in flows_in if f.get("kind") in ("data", "association")}
+    for n in nodes_in:
+        if n["id"] in hosts_with_art:
+            lane = n["lane"]
+            rows_per_lane[lane] = max(rows_per_lane.get(lane, 1), row[n["id"]] + 2)
     for p in pools:
         for l in p.get("lanes", []):
             l["rows"] = rows_per_lane.get(l["id"], 1)
@@ -255,6 +291,10 @@ def to_spec(brief: dict, source: str) -> dict:
     flows = []
     for i, f in enumerate(seq):
         d = dict(src=f["source"], dst=f["target"])
+        # Giữ id cạnh nếu file nguồn đã có: cổng rẽ trỏ tới nhánh mặc định *bằng id*,
+        # nên sinh lại id mới sẽ làm `default=` trỏ vào hư không.
+        if f.get("id"):
+            d["id"] = f["id"]
         if f.get("name"):
             d["name"] = f["name"]
         if f.get("route"):
@@ -269,11 +309,52 @@ def to_spec(brief: dict, source: str) -> dict:
     for f in flows_in:
         if f.get("kind") == "message":
             m = dict(src=f["source"], dst=f["target"])
+            if f.get("id"):
+                m["id"] = f["id"]
             if f.get("name"):
                 m["name"] = f["name"]
             if f.get("offset"):
                 m["offset"] = f["offset"]
             messages.append(m)
+
+    # --- artifact và dây nối của chúng ---------------------------------------------
+    # Artifact không tự biết mình treo vào đâu; chỗ duy nhất nói điều đó là cạnh
+    # `data`/`association`. Nên đọc cạnh trước, rồi mới đặt được artifact.
+    art_ids = {a["id"] for a in artifacts_in}
+    node_ids = {n["id"] for n in nodes_in}
+    links = []
+    for f in flows_in:
+        if f.get("kind") not in ("data", "association"):
+            continue
+        s, t = f["source"], f["target"]
+        if s in art_ids and t in node_ids:
+            art, host, direction = s, t, "input"
+        elif t in art_ids and s in node_ids:
+            art, host, direction = t, s, "output"
+        else:
+            continue
+        links.append(dict(id=f.get("id"), art=art, host=host,
+                          direction=direction, kind=f.get("kind")))
+
+    host_of = {l["art"]: l["host"] for l in links}
+    artifacts = []
+    for a in artifacts_in:
+        out = dict(
+            id=a["id"],
+            name=a.get("name", "") or a.get("text", ""),
+            kind=element_of(a),
+            host=host_of.get(a["id"]),
+        )
+        if a.get("lane"):
+            out["lane"] = a["lane"]
+        artifacts.append(out)
+
+    orphan = [a["id"] for a in artifacts if a["host"] is None]
+    if orphan:
+        print(f"  [chú ý] {len(orphan)} artifact không nối vào phần tử nào, bị bỏ qua: "
+              + ", ".join(orphan))
+        artifacts = [a for a in artifacts if a["host"] is not None]
+        links = [l for l in links if l["art"] not in orphan]
 
     return dict(
         id=meta.get("id", "Definitions_" + pathlib.Path(source).stem.replace("-", "_")),
@@ -282,6 +363,8 @@ def to_spec(brief: dict, source: str) -> dict:
         nodes=nodes,
         flows=flows,
         messages=messages,
+        artifacts=artifacts,
+        links=links,
     )
 
 

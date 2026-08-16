@@ -76,6 +76,11 @@ def load_brief(brief: dict) -> Graph:
     for p in brief.get("pools", []):
         g.pools.add(p["id"])
     for n in brief.get("nodes", []):
+        # Artifact (kho dữ liệu, ghi chú) được vẽ nhưng không nằm trên dòng chảy: không
+        # có token đi qua. Đưa vào đồ thị thì mọi luật "phải có luồng vào/ra" đều báo
+        # nhầm — `load_bpmn` cũng bỏ qua chúng, hai bên phải nói cùng một thứ.
+        if n.get("kind") in ("data", "annotation", "group"):
+            continue
         g.nodes[n["id"]] = Node(
             id=n["id"],
             kind=n.get("kind", "task"),
@@ -85,7 +90,17 @@ def load_brief(brief: dict) -> Graph:
             default=n.get("default", ""),
             lane=n.get("lane", ""),
         )
+    # `bpmn2yaml` đánh dấu nhánh mặc định ở *cạnh* (`default: true`), còn BPMN khai nó ở
+    # *cổng* (`default="Flow_x"`). Dịch lại ở đây thì một model chuyển đổi ngược không bị
+    # `normalize` chọn lại nhánh mặc định lần nữa.
+    for f in brief.get("flows", []):
+        if f.get("default") is True and f.get("source") in g.nodes:
+            g.nodes[f["source"]].default = f.get(
+                "id", f"Flow_{f['source']}__{f['target']}")
+
     for i, f in enumerate(brief.get("flows", [])):
+        if f.get("kind") in ("data", "association"):
+            continue
         if f.get("kind") == "message":
             g.messages.append((f.get("id", f"MF_{i}"), f["source"], f["target"]))
         else:
@@ -332,6 +347,15 @@ def normalize(brief: dict) -> tuple[dict, list[Change]]:
     changes: list[Change] = []
     nodes = brief.setdefault("nodes", [])
     flows = brief.setdefault("flows", [])
+
+    # Nhánh mặc định của một model chuyển đổi ngược nằm ở cạnh; kéo về cổng trước khi
+    # kiểm, nếu không R2 sẽ "sửa" lại đúng cái đã đúng và in ra một dòng thay đổi giả.
+    by_id_pre = {n["id"]: n for n in nodes}
+    for f in flows:
+        if f.get("default") is True and f.get("source") in by_id_pre:
+            by_id_pre[f["source"]].setdefault(
+                "default", f.get("id", f"Flow_{f['source']}__{f['target']}"))
+
     g = load_brief(brief)
 
     # --- R1: chèn cổng hợp lưu trước mỗi node không phải cổng mà có nhiều luồng vào ---
@@ -352,7 +376,7 @@ def normalize(brief: dict) -> tuple[dict, list[Change]]:
         idx = next((k for k, x in enumerate(nodes) if x["id"] == nid), len(nodes))
         nodes.insert(idx, dict(id=gid, kind="gateway", gateway=kind, lane=n.lane))
         for f in flows:
-            if f.get("kind") == "message":
+            if f.get("kind") in ("message", "data", "association"):
                 continue
             if f.get("target") == nid:
                 f["target"] = gid
