@@ -1,0 +1,7 @@
+[project]
+name = "bpmn-generator"
+version = "0.1.0"
+description = "Generate BPMN 2.0 diagrams from YAML descriptions."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
