@@ -2,6 +2,28 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.4.0
+
+**`bpmn-rotate`, đổi phương của sơ đồ** `#feat` `#high`
+
+Lệnh thứ năm: `bpmn-rotate quy-trinh.bpmn -o quy-trinh-doc.bpmn` đổi một sơ đồ ngang thành dọc, hoặc ngược lại. Không phải xoay hình. Xoay hình là việc của phía kết xuất, typst-bpmn quay cả bản vẽ để nó vừa trang giấy và chữ quay theo. Ở đây là đổi *cách đọc*: pool đang là dải ngang xếp chồng thì thành cột dọc đứng cạnh nhau, dòng chảy từ trái sang phải thành từ trên xuống dưới, còn chữ vẫn nằm ngang.
+
+Phép biến đổi là **chuyển vị**, `(x, y) → (y, x)`, không phải phép quay. Quay 90 độ thì hoặc dòng chảy chạy ngược, hoặc lane đầu tiên rơi xuống cuối. Chuyển vị giữ được cả hai thứ tự: điểm bắt đầu vẫn ở góc trên trái, lane khai trước vẫn đứng trước. Về hình học nó là phản chiếu chứ không phải phép quay, nhưng với bản vẽ toàn hình chữ nhật thẳng trục thì không ai nhận ra.
+
+Ba chỗ một phép nhân ma trận thuần tuý làm sai, và đó là phần lớn nội dung của bản này:
+
+**Khung thì hoán kích thước, ký hiệu thì không.** Chuyển vị nguyên xi cả `width` lẫn `height` sẽ biến task 100×80 thành 80×100, cao hơn rộng, mà BPMN luôn vẽ task rộng hơn cao bất kể sơ đồ đi theo phương nào. Ngược lại một pool 3000×250 thì phải thành 250×3000, nếu không thì không còn là cột. Ranh giới đúng là vùng chứa (participant, lane, subprocess đã mở, group) thì hoán, ký hiệu (task, event, gateway, data object, ghi chú) thì giữ. Ký hiệu giữ kích thước thì phải chuyển vị **tâm** rồi đặt lại hộp quanh tâm, chứ không chuyển vị góc trên trái.
+
+**Cạnh phải neo lại.** Ký hiệu không đổi kích thước nên waypoint đã chuyển vị không còn nằm trên viền của chúng. Hai đầu mỗi cạnh được neo lại vào viền theo hướng của đoạn kề, kẹp toạ độ còn lại vào trong cạnh đó nên đoạn thẳng đứng vẫn thẳng đứng sau khi neo. Các điểm gãy ở giữa thì giữ nguyên: định tuyến lại cho bố cục dọc là việc của `build.py` ở chế độ dọc, đã ghi vào [`TODO.md`](TODO.md).
+
+**Nhãn chuyển vị theo ký hiệu.** Đã thử giữ nguyên độ lệch của nhãn so với tâm ký hiệu, để nhãn của event vẫn nằm dưới như trong bản ngang, rồi dựng thử: cạnh đi xuống cắt ngang qua chữ. Quy ước thật không phải "nhãn nằm dưới" mà là "nhãn nằm vuông góc với dòng chảy", nên nhãn chuyển vị theo và chuyển từ dưới sang bên cạnh.
+
+Gốc bản vẽ được giữ nguyên: chuyển vị đổi chỗ hai toạ độ của góc trên trái, không dịch lại thì sơ đồ nhảy sang một chỗ khác trên mặt phẳng mà không vì lý do gì.
+
+Kết quả là *bố cục ngang đã chuyển vị*, không phải bố cục dọc sinh ra từ đầu. Nó dùng được ngay với mọi file `.bpmn`, kể cả file có subprocess hay group mà `bpmn-brief` chưa dựng lại được, và đó là lý do nó tồn tại như một bộ lọc riêng thay vì một cờ của `bpmn-brief`.
+
+Thêm `tests/test_rotate.py`, 19 khẳng định. Cái đáng giá nhất là "xoay hai lần thì mọi hộp về đúng chỗ cũ": chuyển vị là phép đối hợp, nên bất kỳ chỗ nào tính sai một chiều đều lộ ra khi đi ngược lại. Đã kiểm trên mô hình Thẩm Định Thầu B2B, 39 shape và 42 cạnh, lệch 0.
+
 ## v0.3.0
 
 **`markers` trong brief** `#feat` `#high`

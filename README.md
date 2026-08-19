@@ -16,7 +16,7 @@ Trình vẽ đồ hoạ tốt cho một sơ đồ, dở cho hai mươi sơ đồ
 - **Quy ước đặt id.** `Task_1`, `Gateway_3` là mặc định của trình vẽ. Nhưng id là thứ   người khác phải gõ lại khi trích một lát cắt của sơ đồ vào báo cáo. `task-user-lap-ke-hoach` thì đọc là biết. `bpmn-id` sinh, kiểm, và đổi tên hàng loạt.
 - **Diff đọc được.** Hai file `.bpmn` khác nhau vài toạ độ thì `git diff` vô dụng. Một file brief thì diff đúng chỗ bạn đã sửa.
 
-## Bốn lệnh
+## Năm lệnh
 
 | Lệnh | Việc |
 | --- | --- |
@@ -24,6 +24,15 @@ Trình vẽ đồ hoạ tốt cho một sơ đồ, dở cho hai mươi sơ đồ
 | `bpmn-lint <file>` | Kiểm luật cấu trúc + quy ước id. Nhận cả `.bpmn` lẫn `.yaml` |
 | `bpmn-id <file> --rename --also <...>` | Đổi id hàng loạt theo quy ước, sửa luôn chỗ tham chiếu |
 | `bpmn2yaml <file>.bpmn -o <file>.yaml` | Chuyển sang YAML rút gọn cho [typst-bpmn](https://github.com/sam-uit/typst-bpmn) đọc |
+| `bpmn-rotate <file>.bpmn -o <file>-doc.bpmn` | Đổi phương sơ đồ: ngang thành dọc, hoặc ngược lại |
+
+## Ngang hay dọc
+
+`bpmn-rotate` đổi *cách đọc* sơ đồ, không phải xoay hình. Pool đang là dải ngang xếp chồng thì thành cột dọc đứng cạnh nhau, dòng chảy từ trái sang phải thành từ trên xuống dưới, chữ vẫn nằm ngang.
+
+Phép biến đổi là chuyển vị `(x, y) → (y, x)`, không phải phép quay: quay 90 độ thì hoặc dòng chảy chạy ngược, hoặc lane đầu tiên rơi xuống cuối. Chỗ tinh tế là **khung thì hoán kích thước, ký hiệu thì không**: pool 3000×250 phải thành 250×3000, còn task thì vẫn 100×80, vì BPMN luôn vẽ task rộng hơn cao bất kể sơ đồ đi theo phương nào.
+
+Kết quả là bố cục ngang đã chuyển vị, không phải bố cục dọc sinh ra từ đầu, nên các điểm gãy giữa cạnh giữ nguyên chỗ cũ. Đổi lại, nó chạy được với mọi file `.bpmn` kể cả file có subprocess hay group. Bố cục dọc thật thì nằm trong [`docs/TODO.md`](docs/TODO.md).
 
 ## Vòng làm việc
 
