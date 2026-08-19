@@ -78,7 +78,7 @@ SAI                                     ĐÚNG
 
 ## 5. Đặt tên `W-GW-NAME`, `W-BRANCH-LABEL`
 
-Cổng rẽ nhánh đặt tên là **câu hỏi** (`Còn hạn bảo hành?`), nhánh đặt tên là **câu trả lời** (`Còn hạn` / `Hết hạn`, không phải `Yes` / `No`). Cổng hợp lưu không cần tên — nó không hỏi gì.
+Cổng rẽ nhánh đặt tên là **câu hỏi** (`Còn hạn bảo hành?`), nhánh đặt tên là **câu trả lời** (`Còn hạn` / `Hết hạn`, không phải `Yes` / `No`). Cổng hợp lưu (join) không cần tên vì nó không hỏi gì.
 
 ## Tự sửa: cái gì máy làm, cái gì người làm
 
@@ -106,7 +106,7 @@ bpmn-lint content/processes/<ten>.bpmn
 
 Hai thao tác trong Modeler hay sinh lỗi mới:
 
-- Nối thêm một mũi tên vào một task đã có mũi tên vào → `E-MERGE`.
-- Nối message flow từ pool ngoài thẳng vào một cổng → `E-MSG-GATEWAY`.
+- Nối thêm một mũi tên vào một task đã có mũi tên vào $\rightarrow$ `E-MERGE`.
+- Nối message flow từ pool ngoài thẳng vào một cổng $\rightarrow$ `E-MSG-GATEWAY`.
 
 Xem quy trình vận hành ở repo báo cáo cho toàn bộ quy trình bốn bước.
