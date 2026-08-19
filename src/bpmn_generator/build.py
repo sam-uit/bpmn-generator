@@ -33,6 +33,14 @@ PALETTE = {
     "purple": ("#e1bee7", "#5b176d"),
 }
 
+# Ký hiệu lặp vẽ dọc cạnh dưới activity, dưới dạng phần tử con của activity đó. Bảng
+# nằm ở đây vì nó là XML; từ vựng và phần kiểm tra thì ở `brief.py`.
+MARKER_ELEMENTS = {
+    "loop": "<bpmn:standardLoopCharacteristics />",
+    "mi-parallel": '<bpmn:multiInstanceLoopCharacteristics isSequential="false" />',
+    "mi-sequential": '<bpmn:multiInstanceLoopCharacteristics isSequential="true" />',
+}
+
 EVENT_KINDS = {"startEvent", "endEvent", "intermediateCatchEvent", "intermediateThrowEvent"}
 GATEWAY_KINDS = {"exclusiveGateway", "parallelGateway", "inclusiveGateway", "eventBasedGateway"}
 DATA_KINDS = {"dataObjectReference", "dataStoreReference"}
@@ -306,9 +314,19 @@ class Model:
                     body.append(f'      <bpmn:{tag} id="{self.link_id(lk)}">')
                     body.append(f"        <bpmn:{ref}>{lk['art']}</bpmn:{ref}>")
                     body.append(f"      </bpmn:{tag}>")
+                # `loopCharacteristics` đứng **cuối** thân activity theo XSD của BPMN
+                # (tActivity: incoming, outgoing, ..., dataOutputAssociation,
+                # loopCharacteristics), nên chèn sau data association chứ không trước.
+                for m in n.get("markers", ()):
+                    el = MARKER_ELEMENTS.get(m)
+                    if el:
+                        body.append(f"      {el}")
                 extra = ""
                 if n.get("default"):
                     extra = f' default="{n["default"]}"'
+                # compensation không phải phần tử con mà là một thuộc tính của activity.
+                if "compensation" in n.get("markers", ()):
+                    extra += ' isForCompensation="true"'
                 if body:
                     A(f'    <bpmn:{kind} id="{n["id"]}"{nm}{extra}>')
                     L.extend(body)

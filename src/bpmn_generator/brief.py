@@ -31,7 +31,7 @@ import pathlib
 import sys
 
 
-from .build import LANE_LEFT_PAD, POOL_HEADER, Model, build
+from .build import LANE_LEFT_PAD, MARKER_ELEMENTS, POOL_HEADER, Model, build
 from .rules import check, load_brief, normalize
 
 try:
@@ -69,6 +69,90 @@ DATA_KIND = {
 # vào `flowNodeRef`, không tham gia phân tầng. Tách riêng ngay từ đầu thì phần bố cục
 # không phải biết chúng tồn tại.
 ARTIFACT_KINDS = ("data", "annotation")
+
+# --- behaviour marker ------------------------------------------------------------------
+# Ký hiệu BPMN vẽ dọc cạnh dưới một activity. Từ vựng lấy đúng theo `convert.markers_of`,
+# vì hai đầu phải khớp nhau: `bpmn2yaml` ghi ra tên nào thì `bpmn-brief` phải đọc lại
+# được đúng tên đó, nếu không thì vòng lặp yaml -> bpmn -> yaml mất marker ở vòng hai.
+#
+# Ba nhóm, và chúng khác nhau ở chỗ đi vào XML:
+#   loop / mi-*   ->  một phần tử con `loopCharacteristics`
+#   compensation  ->  thuộc tính `isForCompensation` trên chính activity
+#   adhoc         ->  tên phần tử `adHocSubProcess`, tức là đổi cả loại phần tử
+# `MARKER_ELEMENTS` nằm ở `build.py`: nó là chuỗi XML, mà XML là việc của tầng dựng.
+# Ở đây chỉ cần biết *tên nào hợp lệ*, và tên nào sinh ra một `loopCharacteristics`.
+MARKER_CANON = dict.fromkeys(list(MARKER_ELEMENTS) + ["compensation", "adhoc"])
+
+# Tên viết tắt cho cùng một marker. `parallel`/`sequential` có ở đây vì đó là chữ người
+# viết gõ ra trước tiên, và vì trong ngữ cảnh của một activity thì không còn nghĩa nào
+# khác để nhầm. Trên một *cổng* thì có, nên chỗ đó vẫn phải báo lỗi.
+MARKER_ALIASES = {
+    "parallel": "mi-parallel",
+    "sequential": "mi-sequential",
+    "mi_parallel": "mi-parallel",
+    "mi_sequential": "mi-sequential",
+    "multi-instance": "mi-parallel",
+    "multiinstance": "mi-parallel",
+    "compensate": "compensation",
+    "ad-hoc": "adhoc",
+}
+
+# Chỉ activity mang được marker. Cái này không phải giới hạn của script mà là của BPMN:
+# `loopCharacteristics` là thuộc tính của `tActivity`, sự kiện và cổng không có chỗ đặt.
+MARKER_KINDS = ("task", "subprocess")
+
+
+def markers_of(n: dict) -> list[str]:
+    """Đọc `markers:` của một node, chuẩn hoá tên, và dừng lại khi nó vô nghĩa.
+
+    Dừng chứ không bỏ qua: một marker gõ sai mà bị lặng lẽ bỏ thì sơ đồ vẫn sinh ra,
+    vẫn mở được, và thiếu đúng cái vòng lặp mà người viết muốn nói. Lỗi im lặng ở đây
+    đắt hơn hẳn một dòng báo lỗi.
+    """
+    raw = n.get("markers") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not raw:
+        return []
+
+    nid = n.get("id", "?")
+    kind = n.get("kind", "task")
+    if kind not in MARKER_KINDS:
+        hint = ""
+        if kind == "gateway":
+            hint = ("\n  cổng không mang marker; loại cổng khai bằng "
+                    "`gateway: parallel|exclusive|inclusive|event`")
+        elif kind == "event":
+            hint = "\n  sự kiện không mang marker; loại sự kiện khai bằng `definition:`"
+        raise SystemExit(f"bpmn-brief: `markers` chỉ dùng được cho activity, "
+                         f"không cho kind '{kind}' (node {nid}){hint}")
+
+    out: list[str] = []
+    for m in raw:
+        key = MARKER_ALIASES.get(str(m).strip().lower(), str(m).strip().lower())
+        if key not in MARKER_CANON:
+            raise SystemExit(
+                f"bpmn-brief: marker không có: '{m}' (node {nid})\n"
+                f"  hợp lệ: {', '.join(MARKER_CANON)}"
+            )
+        if key == "adhoc":
+            raise SystemExit(
+                f"bpmn-brief: marker 'adhoc' cần phần tử adHocSubProcess (node {nid})\n"
+                "  subprocess chưa hỗ trợ, giữ file .bpmn làm nguồn sự thật cho mô hình này"
+            )
+        if key not in out:
+            out.append(key)
+
+    # Một activity có **một** `loopCharacteristics`, không phải nhiều. Khai cả `loop` lẫn
+    # `mi-parallel` thì XML sinh ra sẽ có hai phần tử con và Modeler chỉ đọc cái đầu:
+    # sai âm thầm, đúng loại lỗi cần bắt sớm.
+    repeat = [m for m in out if m in MARKER_ELEMENTS]
+    if len(repeat) > 1:
+        raise SystemExit(
+            f"bpmn-brief: node {nid} khai {len(repeat)} kiểu lặp cùng lúc "
+            f"({', '.join(repeat)})\n  một activity chỉ mang được một `loopCharacteristics`"
+        )
+    return out
 
 
 def element_of(n: dict) -> str:
@@ -286,6 +370,9 @@ def to_spec(brief: dict, source: str) -> dict:
             out["color"] = n["color"]
         if n.get("default"):
             out["default"] = n["default"]
+        ms = markers_of(n)
+        if ms:
+            out["markers"] = ms
         nodes.append(out)
 
     flows = []
