@@ -35,6 +35,7 @@ out*/
 *.pdf
 *.png
 *.svg
+!docs/*.png
 
 # Vendored binaries
 *.whl
