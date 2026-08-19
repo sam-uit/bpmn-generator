@@ -72,6 +72,7 @@ nodes:
   - { id: event-start-nhan-yeu-cau, name: Nhận yêu cầu bảo hành, kind: event, event: start, lane: lane-cskh }
   - { id: task-user-chan-doan-loi, name: Chẩn đoán lỗi thiết bị, kind: task, task: user, lane: lane-ky-thuat }
   - { id: gateway-exclusive-con-han, name: Còn hạn bảo hành?, kind: gateway, gateway: exclusive, lane: lane-cskh }
+  - { id: task-user-goi-lai-khach, name: Gọi lại khách, kind: task, task: user, lane: lane-cskh, markers: [loop] }
 
 flows:
   - { source: event-start-nhan-yeu-cau, target: gateway-exclusive-con-han }
@@ -81,6 +82,8 @@ flows:
 **Thứ tự khai báo có nghĩa.** Trong các nhánh rời một cổng, nhánh khai *trước* giữ dòng chảy chính khi bố cục, và là nhánh mặc định khi sửa luật. Happy path chỉ cần nói một lần.
 
 Khai `row`/`col` cho node nào thì node đó giữ nguyên, **người viết luôn thắng máy**.
+
+`markers:` là ký hiệu BPMN vẽ dọc cạnh dưới một activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`. Bảng đầy đủ ở [`docs/workflow.md`](docs/workflow.md).
 
 ## Hai chỗ máy dừng lại
 

@@ -2,7 +2,7 @@
 
 Tài liệu này mô tả **vòng làm việc của người dựng sơ đồ**, không phải nội bộ của công cụ. Đọc xong là biết chạy lệnh nào, ở bước nào, và sửa file nào.
 
-Sơ đồ nguồn của quy trình này nằm ở [`bpmnworkflow.bpmn`](bpmnworkflow.bpmn) — chính nó cũng được dựng bằng quy trình này. Chạy `bpmn-lint` lên nó sẽ ra chín lỗi: cả chín đều là *cùng một* hạn chế của bộ kiểm. nó chưa biết một `subProcess` là một phạm vi riêng, nên vừa coi subprocess là node cô lập, vừa coi start/end event bên trong là node của phạm vi ngoài. Xem "Cái gì chưa qua được vòng lặp" ở cuối trang.
+Sơ đồ nguồn của quy trình này nằm ở [`bpmnworkflow.bpmn`](bpmnworkflow.bpmn), chính nó cũng được dựng bằng quy trình này. Chạy `bpmn-lint` lên nó sẽ ra chín lỗi: cả chín đều là *cùng một* hạn chế của bộ kiểm. nó chưa biết một `subProcess` là một phạm vi riêng, nên vừa coi subprocess là node cô lập, vừa coi start/end event bên trong là node của phạm vi ngoài. Xem "Cái gì chưa qua được vòng lặp" ở cuối trang.
 
 ## Toàn cảnh
 
@@ -29,7 +29,7 @@ Hai file, hai vai trò khác nhau, đây là điểm quan trọng nhất của t
 | File | Vai trò | Dùng mấy lần |
 | --- | --- | --- |
 | `<ten>-brief.yaml` | **Nguyên bản.** Bản mô tả đầu tiên, thường chỉ có happy path | **Một lần.** Viết xong, sinh ra `.bpmn` đầu tiên, rồi để đó |
-| `<ten>.yaml` | **Bản cải tiến liên tục.** Do `bpmn2yaml` sinh ra, người sửa tiếp | Nhiều lần — mỗi vòng lặp |
+| `<ten>.yaml` | **Bản cải tiến liên tục.** Do `bpmn2yaml` sinh ra, người sửa tiếp | Nhiều lần, mỗi vòng lặp |
 
 Nói cách khác: **brief là bệ phóng, không phải nguồn sự thật lâu dài.** Sau vòng đầu tiên, thứ bạn sửa là `<ten>.yaml`, nó đã có đủ toạ độ, đủ phần tử bạn thêm trong Modeler, và nó quay ngược lại được vào `bpmn-brief`.
 
@@ -68,7 +68,7 @@ Bố cục tự động giải đúng phần *cấu trúc*, cái gì trước c�
 bpmn2yaml <ten>.bpmn -o <ten>.yaml --strict
 ```
 
-`--strict` thoát với mã lỗi nếu file chứa một phần tử vẽ được mà bộ chuyển đổi chưa hiểu — **đừng bỏ cờ đó**, nó là thứ duy nhất cho biết sơ đồ có mất phần tử hay không.
+`--strict` thoát với mã lỗi nếu file chứa một phần tử vẽ được mà bộ chuyển đổi chưa hiểu. **Đừng bỏ cờ đó**, nó là thứ duy nhất cho biết sơ đồ có mất phần tử hay không.
 
 ### 5. Hài lòng với file bpmn không?
 
@@ -83,7 +83,8 @@ Một vòng `<ten>.yaml` $\rightarrow$ `.bpmn` $\rightarrow$ `<ten>.yaml` giữ 
 
 - **mọi id**: node, sequence flow, message flow, data association;
 - **mọi phần tử**, kể cả kho dữ liệu và ghi chú (chúng được treo lại dưới phần tử chủ);
-- **nhánh mặc định** của mọi cổng rẽ điều kiện.
+- **nhánh mặc định** của mọi cổng rẽ điều kiện;
+- **behaviour marker** của activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`.
 
 Chạy vòng thứ hai trên cùng một file cho ra `.yaml` **giống hệt**, nếu không, đó là lỗi.
 
@@ -101,9 +102,28 @@ Thứ **không** giữ được, và cố ý không giữ:
 | `subprocess` | Cần một mặt phẳng vẽ riêng, chưa có | Tách thành mô hình riêng, hoặc giữ `.bpmn` làm nguồn sự thật cho mô hình đó |
 | `group` | Khung trang trí, không có ngữ nghĩa dòng chảy | Bỏ khỏi `.yaml`, vẽ lại trong Modeler ở vòng cuối |
 
+Marker `adhoc` cũng dừng lại, vì nó không phải một thuộc tính mà là một loại phần tử khác (`adHocSubProcess`), tức là cùng chỗ tắc với `subprocess`.
+
+## Behaviour marker
+
+Ký hiệu BPMN vẽ dọc cạnh dưới một activity. Khai bằng `markers:` trên node, và chỉ trên activity: `loopCharacteristics` là thuộc tính của `tActivity`, nên sự kiện và cổng không có chỗ đặt.
+
+```yaml
+  - { id: task-user-goi-lai-khach, name: Gọi lại khách, kind: task, task: user, markers: [loop] }
+```
+
+| Tên | Vẽ ra | Trong XML |
+| --- | --- | --- |
+| `loop` | mũi tên vòng | `<bpmn:standardLoopCharacteristics />` |
+| `mi-parallel` (`parallel`) | ba vạch dọc | `<bpmn:multiInstanceLoopCharacteristics isSequential="false" />` |
+| `mi-sequential` (`sequential`) | ba vạch ngang | `<bpmn:multiInstanceLoopCharacteristics isSequential="true" />` |
+| `compensation` | mũi tên tua ngược | thuộc tính `isForCompensation="true"` |
+
+`bpmn-brief` dừng lại và báo khi tên marker không có trong bảng, khi marker đặt trên cổng hoặc sự kiện, và khi một activity khai hai kiểu lặp cùng lúc (`loop` cùng với `mi-*`), vì XML khi đó có hai phần tử con mà Modeler chỉ đọc cái đầu. `markers: []` thì hợp lệ ở mọi nơi, không có gì để từ chối.
+
 Một artifact không nối vào phần tử nào cũng bị bỏ, và được báo ra (`[chú ý] …`) không âm thầm biến mất.
 
 ## Xem thêm
 
-- [`naming.md`](naming.md) — quy ước id, bảng từ khoá, và đổi tên hàng loạt
-- [`rules.md`](rules.md) — luật well-formed: cái gì bắt, cái gì tự sửa, và vì sao
+- [`naming.md`](naming.md), quy ước id, bảng từ khoá, và đổi tên hàng loạt
+- [`rules.md`](rules.md), luật well-formed: cái gì bắt, cái gì tự sửa, và vì sao
