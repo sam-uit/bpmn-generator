@@ -22,6 +22,8 @@ Sơ đồ nguồn của quy trình này nằm ở [`bpmnworkflow.bpmn`](bpmnwork
                                                              └─Có──► đưa vào báo cáo
 ```
 
+![BPMN Workflow](./bpmnworkflow.png)
+
 Hai file, hai vai trò khác nhau, đây là điểm quan trọng nhất của tài liệu này:
 
 | File | Vai trò | Dùng mấy lần |
