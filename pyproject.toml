@@ -1,6 +1,6 @@
 [project]
 name = "bpmn-generator"
-version = "0.3.0"
+version = "0.4.0"
 description = "Generate BPMN 2.0 diagrams from coordinate-free YAML briefs, with well-formedness rules and an id convention."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,7 @@ bpmn-brief = "bpmn_generator.brief:main"
 bpmn-lint = "bpmn_generator.lint:main"
 bpmn-id = "bpmn_generator.ids:main"
 bpmn2yaml = "bpmn_generator.convert:main"
+bpmn-rotate = "bpmn_generator.rotate:main"
 
 [project.urls]
 Repository = "https://github.com/sam-uit/bpmn-generator"
