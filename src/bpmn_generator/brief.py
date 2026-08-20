@@ -20,7 +20,7 @@ Trước khi bố cục, brief được `tools/rules.normalize()` sửa những 
 mà máy sửa được mà không cần đặt tên: chèn cổng hợp lưu, đặt nhánh mặc định. Mọi thay đổi
 đều được in ra. Tắt bằng `--no-fix`. Xem `docs/bpmn-rules.md`.
 
-Toạ độ tuyệt đối, bề rộng cột, định tuyến cạnh và BPMNDI do `build.py` lo — script
+Toạ độ tuyệt đối, bề rộng cột, định tuyến cạnh và BPMNDI do `build.py` lo, script
 này chỉ trả lời câu hỏi "cái gì nằm ở ô lưới nào".
 """
 
@@ -175,7 +175,7 @@ def element_of(n: dict) -> str:
     hint = {
         "subprocess": "gỡ subprocess ra thành một mô hình riêng, hoặc giữ file .bpmn "
                       "làm nguồn sự thật cho mô hình này",
-        "group": "bỏ group khỏi .yaml — group chỉ là khung trang trí, vẽ lại trong Modeler",
+        "group": "bỏ group khỏi .yaml, group chỉ là khung trang trí, vẽ lại trong Modeler",
     }.get(kind)
     tail = f"\n  {hint}" if hint else ""
     raise SystemExit(f"bpmn-brief: chưa hỗ trợ kind '{kind}' (node {n.get('id')}){tail}")
@@ -248,7 +248,7 @@ def assign_rows(nodes: list[dict], edges: list[tuple[str, str]], back: set[int],
                 col: dict[str, int]) -> dict[str, int]:
     """Dòng = kế thừa bước trước; nhánh thứ hai trở đi tụt xuống; đụng thì đẩy tiếp.
 
-    Thứ tự khai báo trong YAML quyết định nhánh nào giữ được dòng chính — đó là chỗ
+    Thứ tự khai báo trong YAML quyết định nhánh nào giữ được dòng chính, đó là chỗ
     người viết nói "nhánh này mới là dòng chảy chính", và máy phải nghe theo.
     """
     by_id = {n["id"]: n for n in nodes}
@@ -307,7 +307,7 @@ def to_spec(brief: dict, source: str) -> dict:
     lane_of_pool = {}
     for p in pools_in:
         pid = p["id"]
-        # Một participant không có lane và không chứa node nào là black box — dù file
+        # Một participant không có lane và không chứa node nào là black box, dù file
         # nguồn không nói thẳng. Đây là chỗ `.yaml` chuyển đổi ngược quay lại được:
         # `bpmn2yaml` không ghi `blackbox`, nó chỉ đơn giản không ghi `lanes`.
         if p.get("blackbox") or not p.get("lanes"):
@@ -351,7 +351,7 @@ def to_spec(brief: dict, source: str) -> dict:
     for n in nodes_in:
         lane = n["lane"]
         rows_per_lane[lane] = max(rows_per_lane.get(lane, 1), row[n["id"]] + 1)
-    # Artifact treo dưới phần tử chủ, nên lane phải chừa thêm một dòng cho nó — nếu
+    # Artifact treo dưới phần tử chủ, nên lane phải chừa thêm một dòng cho nó, nếu
     # không thì cái kho dữ liệu rơi ra ngoài khung lane.
     hosts_with_art = {f["target"] if f["source"] in {a["id"] for a in artifacts_in} else f["source"]
                       for f in flows_in if f.get("kind") in ("data", "association")}
@@ -495,7 +495,7 @@ def to_spec(brief: dict, source: str) -> dict:
 def report_fit(spec: dict, text_width_mm: float = 174.0, font_units: float = 11.0) -> None:
     """Kích thước "đủ nhìn" là một quyết định, nên phải nói ra bằng số.
 
-    Không cố ép sơ đồ nhỏ nhất hay to nhất — chỉ báo cỡ chữ sẽ in ra và gợi ý lát cắt
+    Không cố ép sơ đồ nhỏ nhất hay to nhất, chỉ báo cỡ chữ sẽ in ra và gợi ý lát cắt
     khi nó rơi xuống dưới ngưỡng đọc được (6pt).
     """
     m = Model(spec)
@@ -532,10 +532,10 @@ def report_fit(spec: dict, text_width_mm: float = 174.0, font_units: float = 11.
         nm = names.get(lane, lane)
         print(f"    lane {nm:<18.18} {lw:7.0f} đv   {verdict(lw)}   ({cnt} node)")
 
-    print("  (số của lane là cận trên — `compact: true` còn nén được các dải trống)")
+    print("  (số của lane là cận trên, `compact: true` còn nén được các dải trống)")
     if pt < 6:
         print("  Gợi ý: cắt bằng bpmn-lane(M, \"<tên lane>\"), hoặc hẹp hơn nữa bằng")
-        print("         bpmn-part(M, (<id>, ..), lane: \"<tên lane>\") — xem docs/bpmn-workflow.md")
+        print("         bpmn-part(M, (<id>, ..), lane: \"<tên lane>\"), xem docs/bpmn-workflow.md")
 
 
 def report_pinning(spec: dict) -> None:
@@ -576,7 +576,7 @@ def main() -> int:
     if out == str(src):
         return print("bpmnbrief: cần -o, tên file không có hậu tố -brief") or 1
 
-    # Sửa những vi phạm máy sửa được, trước khi bố cục — chèn cổng làm đổi đồ thị nên
+    # Sửa những vi phạm máy sửa được, trước khi bố cục, chèn cổng làm đổi đồ thị nên
     # phải xong trước khi phân tầng.
     if not args.no_fix:
         brief, changes = normalize(brief)
