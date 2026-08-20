@@ -2,6 +2,24 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.5
+
+**An annotation can hang off a sequence flow again**
+
+`brief.py` built a link only when one end of an `association` was a node. An association whose other end was a *flow* was skipped, the annotation was then left with no host, and the orphan sweep deleted it together with both of its associations. Annotating one branch of a gateway is the main thing annotations are for, so the case that silently lost data was the common one, and it lost it quietly: the only trace was one `[chú ý]` line counting orphans.
+
+A data association still has to end on a node, because it moves data between an activity and a data object. Only a plain `association` may now name a flow.
+
+Three things follow from letting a flow be a host, and each is a place where a flow is not a box:
+
+- **Where the annotation sits.** A sequence flow has no bounds, so it stands in as a zero-sized point at the middle of its own route, and the annotation hangs below that point the way it hangs below a task. The midpoint is measured by length rather than by vertex count, because an orthogonal route is mostly short jogs plus one long run and the middle vertex is usually a corner.
+- **Which process owns it.** Neither, and that is not a gap in the model. Camunda Modeler writes a flow-level annotation into the `<bpmn:collaboration>`, next to the message flows, and so does this now: an artifact with no pool is written there along with its associations. A node still lends its pool to whatever hangs off it, so nothing changes for an annotation on a task.
+- **Which end is the source.** An association can be drawn from the annotation to the thing or from the thing to the annotation, and `direction` was the only record of which. The emitter used to write `sourceRef="host"` unconditionally and flipped every annotation-first association on the way through. It now follows what the file said.
+
+Measured on `samples/b04-btvn01.bpmn`, the model that has one of these: every node, every flow, the annotation and both associations now survive a full round trip with identical coordinates, and the emitted `<bpmn:collaboration>` block matches Camunda Modeler's own element for element. The only remaining differences are the exclusive gateway `bpmn-brief` deliberately inserts to fix a merge into an event, and the two flows retargeted onto it.
+
+**`tests/test_roundtrip.py`** gains five assertions on a document whose annotation hangs off a sequence flow: it survives, its association survives with the same two ends, it is written at collaboration level, and both come back with the same bounds and waypoints.
+
 ## v0.5.4
 
 **A pool without a lane is a pool, not a black box**

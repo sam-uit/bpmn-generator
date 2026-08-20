@@ -251,6 +251,81 @@ eq(solo_back["pools"], solo_src["pools"],
    "the laneless pool comes back with the same process, bounds and absent lane set")
 
 
+# --- an annotation hanging off a sequence flow ------------------------------------------
+# `bpmn-brief` used to build a link only when one end of an association was a node, so an
+# association whose other end was a *flow* was skipped, the annotation was left with no
+# host, and it was reported as an orphan and deleted along with both associations.
+# Annotating one branch of a gateway is the main thing annotations are for, so the case
+# that failed was the common one.
+NOTED = """\
+meta:
+  id: rt-noted
+  source: noted.bpmn
+  title: ""
+  layout: di
+
+pools:
+  - id: pool-n
+    name: Pool
+    process: Proc_n
+    horizontal: true
+    bounds: { x: 160, y: 60, w: 600, h: 200 }
+
+nodes:
+  - id: task-user-a
+    name: A
+    kind: task
+    task: user
+    bounds: { x: 220, y: 100, w: 100, h: 80 }
+    pool: pool-n
+  - id: task-user-b
+    name: B
+    kind: task
+    task: user
+    bounds: { x: 420, y: 100, w: 100, h: 80 }
+    pool: pool-n
+  - id: note-1
+    kind: annotation
+    text: Chu y
+    bounds: { x: 330, y: 200, w: 100, h: 40 }
+
+flows:
+  - id: f-ab
+    kind: sequence
+    source: task-user-a
+    target: task-user-b
+    waypoints: [[320, 140], [420, 140]]
+  - id: a-note
+    kind: association
+    source: f-ab
+    target: note-1
+    waypoints: [[370, 140], [370, 200]]
+    direction: none
+"""
+
+noted_src = yaml.safe_load(NOTED)
+noted_xml, noted_back = cycle_xml(NOTED, "noted")
+
+eq("<bpmn:textAnnotation id=\"note-1\">" in noted_xml, True,
+   "an annotation hanging off a flow survives instead of being dropped as an orphan")
+eq('<bpmn:association id="a-note" sourceRef="f-ab" targetRef="note-1" />' in noted_xml, True,
+   "its association survives too, with the same two ends the author drew")
+head = noted_xml.split("</bpmn:collaboration>", 1)[0]
+eq("<bpmn:textAnnotation" in head, True,
+   "it is written in the collaboration, not in a process: it comments on the flow, and a"
+   " flow-level annotation has no process to belong to")
+
+for d in (noted_src, noted_back):
+    d["meta"].pop("source", None)
+    d["meta"].pop("extent", None)
+by_id = {n["id"]: n for n in noted_back["nodes"]}
+eq(by_id.get("note-1"), {n["id"]: n for n in noted_src["nodes"]}["note-1"],
+   "and it comes back with the same text and the same bounds, gaining no pool")
+eq([f for f in noted_back["flows"] if f["id"] == "a-note"],
+   [f for f in noted_src["flows"] if f["id"] == "a-note"],
+   "the association keeps its waypoints through the loop")
+
+
 def main() -> int:
     bad = [c for c in CASES if not c[0]]
     for ok, why, got, want in CASES:

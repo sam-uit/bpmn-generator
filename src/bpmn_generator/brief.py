@@ -463,14 +463,20 @@ def to_spec(brief: dict, source: str) -> dict:
     # `data`/`association`. Nên đọc cạnh trước, rồi mới đặt được artifact.
     art_ids = {a["id"] for a in artifacts_in}
     node_ids = {n["id"] for n in nodes_in}
+    flow_ids = {f["id"] for f in flows_in if f.get("id")}
     links = []
     for f in flows_in:
         if f.get("kind") not in ("data", "association"):
             continue
+        # A text annotation is allowed to hang off a *sequence flow*, and annotating one
+        # branch of a gateway is the main thing annotations are for. A data association is
+        # not: it moves data between an activity and a data object, so only a node can be
+        # at that end.
+        hosts = node_ids | flow_ids if f.get("kind") == "association" else node_ids
         s, t = f["source"], f["target"]
-        if s in art_ids and t in node_ids:
+        if s in art_ids and t in hosts:
             art, host, direction = s, t, "input"
-        elif t in art_ids and s in node_ids:
+        elif t in art_ids and s in hosts:
             art, host, direction = t, s, "output"
         else:
             continue

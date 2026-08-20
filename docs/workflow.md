@@ -105,7 +105,7 @@ Thứ **không** giữ được, và cố ý không giữ:
 | `subprocess` | Cần một mặt phẳng vẽ riêng, chưa có | Tách thành mô hình riêng, hoặc giữ `.bpmn` làm nguồn sự thật cho mô hình đó |
 | `group` | Khung trang trí, không có ngữ nghĩa dòng chảy | Bỏ khỏi `.yaml`, vẽ lại trong Modeler ở vòng cuối |
 
-Two known holes, both with a reproducer in [`TODO.md`](TODO.md): a text annotation attached to a *sequence flow* rather than to a node is dropped together with its associations, and a model with no pool at all (a plain process with no collaboration) crashes rather than reporting anything. An annotation attached to a node survives the loop normally.
+One known hole, with a reproducer in [`TODO.md`](TODO.md): a model with no pool at all, a plain process with no collaboration, crashes rather than reporting anything. Annotations survive the loop whether they hang off a node or off a sequence flow; the flow-level ones are written into the collaboration, which is where Camunda Modeler puts them.
 
 Marker `adhoc` cũng dừng lại, vì nó không phải một thuộc tính mà là một loại phần tử khác (`adHocSubProcess`), tức là cùng chỗ tắc với `subprocess`.
 

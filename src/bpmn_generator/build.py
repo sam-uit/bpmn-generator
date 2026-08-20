@@ -111,6 +111,33 @@ def size_of(kind: str) -> tuple[int, int]:
     return TASK_W, TASK_H
 
 
+def polyline_midpoint(wps: list[tuple[float, float]]) -> tuple[float, float]:
+    """The point half way along a polyline, measured by length rather than by count.
+
+    Measured rather than counted because an orthogonal route is mostly short jogs and one
+    long run; taking the middle *vertex* would put the anchor in a corner, while the middle
+    of the *length* lands on the long run, which is the part a reader sees as the line.
+    """
+    if not wps:
+        return (0.0, 0.0)
+    if len(wps) == 1:
+        return wps[0]
+    spans = []
+    total = 0.0
+    for (x0, y0), (x1, y1) in zip(wps, wps[1:]):
+        d = abs(x1 - x0) + abs(y1 - y0)
+        spans.append(d)
+        total += d
+    half = total / 2
+    for i, d in enumerate(spans):
+        if half <= d or i == len(spans) - 1:
+            (x0, y0), (x1, y1) = wps[i], wps[i + 1]
+            t = half / d if d else 0.0
+            return (x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
+        half -= d
+    return wps[len(wps) // 2]
+
+
 def _pin(node: dict, b: dict | None) -> None:
     """Đặt một phần tử vào đúng hộp đã cho, và tính lại tâm theo hộp đó."""
     if not b:
@@ -223,6 +250,27 @@ class Model:
         for n in self.nodes.values():
             _pin(n, n.get("bounds"))
 
+    def host_box(self, host_id: str) -> dict | None:
+        """The box an artifact hangs from, whether that is a node or a sequence flow.
+
+        A node is its own box. A sequence flow is not a box at all, so it stands in as a
+        zero-sized point at the middle of its own route, which puts the annotation below
+        the line exactly where a modeler drops it. Pool and lane come from the flow's
+        source node, because an association has to be written inside the process that owns
+        the flow it annotates.
+        """
+        node = self.nodes.get(host_id)
+        if node is not None:
+            return node
+        for f in self.flows:
+            if self.flow_id(f) != host_id:
+                continue
+            mx, my = polyline_midpoint(self.route(f))
+            src = self.nodes[f["src"]]
+            return dict(id=host_id, x=mx, y=my, w=0.0, h=0.0, cx=mx, cy=my,
+                        pool=src["pool"], lane=src["lane"])
+        return None
+
     def place_artifacts(self) -> None:
         """Artifact treo dưới phần tử chủ của nó.
 
@@ -232,7 +280,7 @@ class Model:
         """
         per_host: dict[str, int] = {}
         for a in self.artifacts.values():
-            host = self.nodes.get(a.get("host") or "")
+            host = self.host_box(a.get("host") or "")
             if host is None:
                 continue
             w, h = size_of(a["kind"])
@@ -243,8 +291,13 @@ class Model:
             a["y"] = host["y"] + host["h"] + ARTIFACT_GAP
             a["cx"] = a["x"] + w / 2
             a["cy"] = a["y"] + h / 2
-            a["pool"] = a.get("pool") or host["pool"]
-            a["lane"] = a.get("lane") or host["lane"]
+            # A node lends its pool to whatever hangs off it. A sequence flow does not:
+            # an annotation on a flow is written at collaboration level, outside every
+            # process, which is where Camunda Modeler puts it and therefore where a file
+            # that came from Modeler expects to find it again.
+            host_is_node = a.get("host") in self.nodes
+            a["pool"] = a.get("pool") or (host["pool"] if host_is_node else None)
+            a["lane"] = a.get("lane") or (host["lane"] if host_is_node else None)
 
     # -- định tuyến cạnh ------------------------------------------------------
     def route(self, flow: dict) -> list[tuple[float, float]]:
@@ -466,6 +519,17 @@ class Model:
                 f'    <bpmn:messageFlow id="{self.msg_id(m, i)}"{nm}'
                 f' sourceRef="{m["src"]}" targetRef="{m["dst"]}" />'
             )
+        # An artifact that belongs to no pool lives in the collaboration, next to the
+        # message flows. That is the case for an annotation hanging off a sequence flow:
+        # it comments on the flow, not on either process, and it has no process to live in.
+        loose = [a for a in self.artifacts.values() if not a.get("pool")]
+        for a in loose:
+            L.extend(self.artifact_lines(a, 4))
+        loose_ids = {a["id"] for a in loose}
+        for lk in self.links:
+            if lk.get("kind") != "association" or lk["art"] not in loose_ids:
+                continue
+            L.extend(self.association_lines(lk, 4))
         A("  </bpmn:collaboration>")
 
         # --- process ---
@@ -541,13 +605,7 @@ class Model:
             for a in self.artifacts.values():
                 if a.get("pool") != p["id"]:
                     continue
-                if a["kind"] == "textAnnotation":
-                    A(f'    <bpmn:textAnnotation id="{a["id"]}">')
-                    A(f"      <bpmn:text>{escape(a.get('name', ''))}</bpmn:text>")
-                    A("    </bpmn:textAnnotation>")
-                else:
-                    nm = f' name="{escape(a["name"])}"' if a.get("name") else ""
-                    A(f'    <bpmn:{a["kind"]} id="{a["id"]}"{nm} />')
+                L.extend(self.artifact_lines(a, 4))
 
             for f in self.flows:
                 if self.nodes[f["src"]]["pool"] != p["id"]:
@@ -562,10 +620,7 @@ class Model:
                     continue
                 if self.artifacts[lk["art"]].get("pool") != p["id"]:
                     continue
-                A(
-                    f'    <bpmn:association id="{self.link_id(lk)}"'
-                    f' sourceRef="{lk["host"]}" targetRef="{lk["art"]}" />'
-                )
+                L.extend(self.association_lines(lk, 4))
             A("  </bpmn:process>")
 
         # --- diagram ---
@@ -649,7 +704,9 @@ class Model:
                 A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNShape>")
         for lk in self.links:
-            a, host = self.artifacts[lk["art"]], self.nodes[lk["host"]]
+            a, host = self.artifacts[lk["art"]], self.host_box(lk["host"])
+            if host is None:
+                continue
             # Artifact luôn nằm dưới chủ của nó, nên hai điểm là đủ: đáy chủ, đỉnh artifact.
             given = lk.get("waypoints")
             if given:
@@ -720,6 +777,36 @@ class Model:
     @staticmethod
     def msg_id(m: dict, i: int) -> str:
         return m.get("id") or f"MF_{i}"
+
+    @staticmethod
+    def artifact_lines(a: dict, indent: int) -> list[str]:
+        """The XML element for one artifact, written the same whether it sits in a process
+        or in the collaboration."""
+        pad = " " * indent
+        if a["kind"] == "textAnnotation":
+            return [
+                f'{pad}<bpmn:textAnnotation id="{a["id"]}">',
+                f"{pad}  <bpmn:text>{escape(a.get('name', ''))}</bpmn:text>",
+                f"{pad}</bpmn:textAnnotation>",
+            ]
+        nm = f' name="{escape(a["name"])}"' if a.get("name") else ""
+        return [f'{pad}<bpmn:{a["kind"]} id="{a["id"]}"{nm} />']
+
+    @classmethod
+    def association_lines(cls, lk: dict, indent: int) -> list[str]:
+        """The XML element for one association.
+
+        Which end is the source is the author's choice, not ours: an association can be
+        drawn from the annotation to the thing or the other way about, and `direction` is
+        the only record of which way it was drawn.
+        """
+        if lk.get("direction") == "input":
+            src, dst = lk["art"], lk["host"]
+        else:
+            src, dst = lk["host"], lk["art"]
+        pad = " " * indent
+        return [f'{pad}<bpmn:association id="{cls.link_id(lk)}"'
+                f' sourceRef="{src}" targetRef="{dst}" />']
 
     @staticmethod
     def link_id(lk: dict) -> str:
