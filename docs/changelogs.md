@@ -2,6 +2,18 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.6.1
+
+**A licence, a check gate, and an ignore file that is about this repository**
+
+Three gaps found by reading the repository as a stranger would, before packing it up.
+
+**LICENSE.** `pyproject.toml` has declared `license = { text = "MIT" }` since the package was first published, and there was no licence file to point at. A declaration without the text is not a licence; anybody who wanted to use this had nothing to read and nothing to comply with.
+
+**A check gate of its own.** typst-bpmn installs this package from a git tag and calls `bpmn2yaml` inside its own gate, so a tag that nothing had ever tested was what another repository pinned itself to. `.github/workflows/check.yml` runs the six test scripts on every push and pull request, on Python 3.11 and 3.12: the floor stated in `pyproject.toml` and the version typst-bpmn's CI runs on, because a syntax feature added after 3.11 would otherwise pass here and fail for the one consumer that matters. It also checks that the package imports, that all five console scripts resolve after an install, and that `pyproject.toml` and `_version.py` state the same version. The tests run against the working tree rather than an installed copy, which is what a pull request needs to check.
+
+**`.gitignore`.** Half of it was about the other repository: `samples/`, `models/`, `plan.md`, `out2/`, `*.whl`, `*.ttf`, copied across when the tools were split out and never read again. What is left is what this repository actually produces, and each rule now says why it is there. Two are load-bearing and easy to delete by accident: `!docs/*.png`, which keeps the one committed picture out of the `*.png` sweep, and `uv.lock`, which is deliberately not committed because a lock file belongs to an application and this is a library.
+
 ## v0.6.0
 
 **The vertical layout mode, and the last thing the `.yaml` said that `build.py` ignored**

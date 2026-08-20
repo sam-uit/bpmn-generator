@@ -1,0 +1,64 @@
+# The repository's check gate, on every push and every pull request.
+#
+# Why this file exists: typst-bpmn installs this package from a git tag and calls
+# `bpmn2yaml` inside its own check gate. A tag that nothing ever tested is a poor thing
+# for another repository to pin itself to, so the tag is now tested here first.
+#
+# The tests are plain scripts with no test-runner dependency, so this is `python3` in a
+# loop rather than a framework. `PYTHONPATH=src` runs them against the working tree,
+# which is what a pull request needs to check; installing the package first would test
+# whatever was published instead of what is proposed.
+#
+# Action major versions were read from each action's own README in 08-2026 rather than
+# recalled, the same as in typst-bpmn's workflow.
+
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor stated in pyproject.toml, and the version typst-bpmn's CI runs on.
+        # Both, because a syntax feature added after 3.11 would otherwise pass here and
+        # fail for the one consumer that matters.
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install the one runtime dependency
+        run: pip install "pyyaml>=6.0"
+
+      - name: run the test scripts
+        run: |
+          status=0
+          for t in tests/*.py; do
+            echo "== $t"
+            PYTHONPATH=src python3 "$t" || status=1
+          done
+          exit $status
+
+      - name: the package imports and the console scripts resolve
+        run: |
+          pip install .
+          python3 -c "import bpmn_generator; print(bpmn_generator.__version__)"
+          for cmd in bpmn-brief bpmn-lint bpmn-id bpmn2yaml bpmn-rotate; do
+            command -v "$cmd" > /dev/null || { echo "missing console script: $cmd"; exit 1; }
+          done
+
+      - name: the version agrees between pyproject.toml and _version.py
+        run: |
+          a=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          b=$(grep -m1 '^__version__' src/bpmn_generator/_version.py | cut -d'"' -f2)
+          [ "$a" = "$b" ] || { echo "version drift: pyproject $a, _version $b"; exit 1; }
+          echo "version $a"

@@ -57,6 +57,8 @@ Every dependency is either synchronised automatically or described explicitly at
 for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done
 ```
 
+The same loop runs in CI on every push and pull request, on Python 3.11 and 3.12, together with an install check that the five console scripts resolve and that `pyproject.toml` and `_version.py` state the same version. See [`.github/workflows/check.yml`](.github/workflows/check.yml).
+
 The six files are `test_ids.py` (id convention, 24 assertions), `test_markers.py` (activity markers, 17), `test_message_routes.py` (message flow geometry, 20), `test_rotate.py` (orientation transpose, 19), `test_roundtrip.py` (yaml to bpmn to yaml is lossless, 24) and `test_vertical.py` (the vertical layout mode, 21). They are plain scripts with no test-runner dependency, so `PYTHONPATH=src python3` is enough and `uv run` is not required; each prints a count and exits non-zero if any of its cases failed.
 
 The round-trip test is the one that guards the workflow itself. The improvement loop only works while `.yaml` to `.bpmn` to `.yaml` comes back byte-identical apart from `source`; the moment a coordinate is dropped, the author's manual work in the modeler is silently lost on the next pass.

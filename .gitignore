@@ -7,43 +7,25 @@ dist/
 build/
 .pytest_cache/
 
-# Local configuration (copy from config.example.yaml)
-config.yaml
-
-# Logs
-logs/
-
-# Soft-deleted files (move here instead of deleting)
-_trash/
-
-# OS / editors
+# OS and editors
 .DS_Store
 .idea/
 .vscode/
 
-# --- typst-bpmn ------------------------------------------------------------
-# Source models and reference renders: inputs, not code
-samples/
-plan.md
-
-# Converted models: build products of tools/bpmn2yaml.py
-models/
-
-# Render output
-out/
-out*/
-*.pdf
-*.png
-*.svg
-!docs/*.png
-
-# Vendored binaries
-*.whl
-*.ttf
-*.otf
-
-# Soft-deleted files (device_bash cannot rm; move here instead)
+# Soft-deleted files. `device_bash` cannot remove a file on a mounted folder, so things
+# are moved here instead of deleted, and the folder is not part of the repository.
+_trash/
 _to_delete/
 
-# Library, not application, resolve fresh in each consumer
+# Generated diagrams and renders. `docs/bpmnworkflow.png` is the exception and is
+# committed: it is the picture the README points at, not a build product.
+out/
+*.pdf
+*.svg
+*.png
+!docs/*.png
+
+# A lock file belongs to an application, not to a library. This package is installed by
+# other projects, which resolve their own dependencies; committing a lock here would
+# claim a say over resolutions that are not ours to make.
 uv.lock
