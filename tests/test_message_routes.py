@@ -30,10 +30,11 @@ def band(x, y, w, h):
     return dict(x=x, y=y, w=w, h=h)
 
 
-def model(nodes=None, bands=None):
+def model(nodes=None, bands=None, horizontal=True):
     m = Model.__new__(Model)
     m.nodes = nodes or {}
     m.pool_bounds = bands or {}
+    m.horizontal = horizontal
     return m
 
 

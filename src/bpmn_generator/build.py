@@ -161,55 +161,114 @@ class Model:
         for p in self.pools:
             for ln in p.get("lanes", []):
                 self.lane_of_pool[ln["id"]] = p["id"]
+        self.horizontal = self.reading_direction()
         self.layout()
+
+    # -- the two axes ---------------------------------------------------------
+    def reading_direction(self) -> bool:
+        """True when the diagram reads left to right, False when it reads top to bottom.
+
+        `bpmn2yaml` writes `horizontal:` per pool because that is where BPMN keeps it, on
+        each participant's shape. A diagram whose pools disagree is legal and unreadable,
+        so the first stated value decides and the disagreement is reported rather than
+        silently resolved.
+        """
+        stated = [bool(p["horizontal"]) for p in self.pools if "horizontal" in p]
+        if not stated:
+            return True
+        if len(set(stated)) > 1:
+            first = "horizontal" if stated[0] else "vertical"
+            print(f"  [note] the pools disagree about reading direction; drawing the whole"
+                  f" diagram {first}, after the first pool that states one")
+        return stated[0]
+
+    def xy(self, main: float, cross: float) -> tuple[float, float]:
+        """Map a point from the flow's own frame to the page.
+
+        `main` runs along the flow, `cross` runs across the lanes. Laying out in this frame
+        and mapping at the end is what makes the vertical mode a real layout rather than a
+        transposed horizontal one: a column's pitch is measured from the extent the shapes
+        actually occupy along the flow, which is their width when reading across and their
+        height when reading down.
+        """
+        return (main, cross) if self.horizontal else (cross, main)
+
+    def box(self, main: float, cross: float, main_size: float, cross_size: float) -> dict:
+        """A rectangle given in the flow's frame, returned in page coordinates."""
+        x, y = self.xy(main, cross)
+        w, h = self.xy(main_size, cross_size)
+        return dict(x=x, y=y, w=w, h=h)
+
+    def frame(self, b: dict) -> dict:
+        """A page rectangle read back in the flow's frame.
+
+        The inverse of `box`, and needed because pinned bounds arrive in page coordinates
+        while routing wants to reason along the flow.
+        """
+        main, cross = self.xy(b["x"], b["y"])
+        main_size, cross_size = self.xy(b["w"], b["h"])
+        return dict(x=main, y=cross, w=main_size, h=cross_size,
+                    cx=main + main_size / 2, cy=cross + cross_size / 2)
+
+    def node_extent(self, kind: str) -> tuple[float, float]:
+        """A shape's extent along the flow and across it.
+
+        BPMN glyphs do not turn with the diagram: a task is 100 wide and 80 tall whichever
+        way the process reads. So reading down, a task occupies 80 along the flow and 100
+        across it, and that swap is the whole reason a native vertical layout is tighter
+        than a transposed one.
+        """
+        w, h = size_of(kind)
+        return (w, h) if self.horizontal else (h, w)
 
     # -- bố cục ---------------------------------------------------------------
     def layout(self) -> None:
         cols = sorted({n["col"] for n in self.nodes.values()})
-        widths = {}
+        col_size = {}
         for c in cols:
-            widths[c] = max(size_of(n["kind"])[0] for n in self.nodes.values() if n["col"] == c)
+            col_size[c] = max(self.node_extent(n["kind"])[0]
+                              for n in self.nodes.values() if n["col"] == c)
 
-        x = POOL_X + POOL_HEADER + LANE_LEFT_PAD
-        col_x = {}
+        main = POOL_X + POOL_HEADER + LANE_LEFT_PAD
+        col_main = {}
         for c in cols:
-            col_x[c] = x
-            x += widths[c] + GAP
-        content_w = x - GAP - (POOL_X + POOL_HEADER + LANE_LEFT_PAD)
-        self.col_x = col_x
-        self.col_w = widths
-        self.lane_w = POOL_HEADER + LANE_LEFT_PAD + content_w + LANE_RIGHT_PAD
+            col_main[c] = main
+            main += col_size[c] + GAP
+        content = main - GAP - (POOL_X + POOL_HEADER + LANE_LEFT_PAD)
+        self.col_x = col_main
+        self.col_w = col_size
+        self.lane_w = POOL_HEADER + LANE_LEFT_PAD + content + LANE_RIGHT_PAD
         self.pool_w = self.lane_w
 
-        # trục dọc: pool black box trên, pool chính, pool black box dưới
-        y = 60
+        # across the flow: black box bands first, then the pools that have content
+        cross = 60
         self.pool_bounds: dict[str, dict] = {}
         self.lane_bounds: dict[str, dict] = {}
         for p in self.pools:
             if p.get("blackbox"):
-                self.pool_bounds[p["id"]] = dict(x=POOL_X, y=y, w=self.pool_w, h=BLACKBOX_H)
-                y += BLACKBOX_H + 40
+                self.pool_bounds[p["id"]] = self.box(POOL_X, cross, self.pool_w, BLACKBOX_H)
+                cross += BLACKBOX_H + 40
                 continue
-            pool_y = y
+            pool_cross = cross
             for ln in p["lanes"]:
-                h = LANE_PAD_TOP + ln["rows"] * ROW_PITCH + LANE_PAD_BOT
-                self.lane_bounds[ln["id"]] = dict(
-                    x=POOL_X + POOL_HEADER, y=y, w=self.lane_w - POOL_HEADER, h=h
-                )
-                y += h
-            self.pool_bounds[p["id"]] = dict(x=POOL_X, y=pool_y, w=self.pool_w, h=y - pool_y)
-            y += 40
+                thickness = LANE_PAD_TOP + ln["rows"] * ROW_PITCH + LANE_PAD_BOT
+                self.lane_bounds[ln["id"]] = self.box(
+                    POOL_X + POOL_HEADER, cross, self.lane_w - POOL_HEADER, thickness)
+                cross += thickness
+            self.pool_bounds[p["id"]] = self.box(
+                POOL_X, pool_cross, self.pool_w, cross - pool_cross)
+            cross += 40
 
         for n in self.nodes.values():
-            w, h = size_of(n["kind"])
-            lb = self.lane_bounds[n["lane"]]
-            band_top = lb["y"] + LANE_PAD_TOP + n["row"] * ROW_PITCH
-            cw = widths[n["col"]]
-            n["w"], n["h"] = w, h
-            n["x"] = col_x[n["col"]] + (cw - w) // 2
-            n["y"] = band_top + (ROW_BAND - h) // 2
-            n["cx"] = n["x"] + w / 2
-            n["cy"] = n["y"] + h / 2
+            main_size, cross_size = self.node_extent(n["kind"])
+            lane = self.frame(self.lane_bounds[n["lane"]])
+            band = lane["y"] + LANE_PAD_TOP + n["row"] * ROW_PITCH
+            n_main = col_main[n["col"]] + (col_size[n["col"]] - main_size) // 2
+            n_cross = band + (ROW_BAND - cross_size) // 2
+            b = self.box(n_main, n_cross, main_size, cross_size)
+            n["x"], n["y"], n["w"], n["h"] = b["x"], b["y"], b["w"], b["h"]
+            n["cx"] = n["x"] + n["w"] / 2
+            n["cy"] = n["y"] + n["h"] / 2
             n["pool"] = self.lane_of_pool[n["lane"]]
 
         self.pin_given_bounds()
@@ -242,11 +301,13 @@ class Model:
                     # An implicit band has no bounds of its own to pin, and leaving it on
                     # the computed grid while its pool moved to pinned coordinates would
                     # place every unpinned node in the wrong place. It is the pool minus
-                    # the header strip, which is exactly what a lane rectangle is.
-                    pb = self.pool_bounds[p["id"]]
-                    self.lane_bounds[ln["id"]] = dict(
-                        x=pb["x"] + POOL_HEADER, y=pb["y"],
-                        w=pb["w"] - POOL_HEADER, h=pb["h"])
+                    # the header strip, which is exactly what a lane rectangle is. The
+                    # header runs along the start of the flow, down the left of a pool that
+                    # reads across and along the top of one that reads down.
+                    pf = self.frame(self.pool_bounds[p["id"]])
+                    self.lane_bounds[ln["id"]] = self.box(
+                        pf["x"] + POOL_HEADER, pf["y"],
+                        pf["w"] - POOL_HEADER, pf["h"])
         for n in self.nodes.values():
             _pin(n, n.get("bounds"))
 
@@ -283,14 +344,20 @@ class Model:
             host = self.host_box(a.get("host") or "")
             if host is None:
                 continue
-            w, h = size_of(a["kind"])
             k = per_host.get(host["id"], 0)
             per_host[host["id"]] = k + 1
-            a["w"], a["h"] = w, h
-            a["x"] = host["cx"] - w / 2 + k * ARTIFACT_PITCH
-            a["y"] = host["y"] + host["h"] + ARTIFACT_GAP
-            a["cx"] = a["x"] + w / 2
-            a["cy"] = a["y"] + h / 2
+            # An artifact hangs *across* the flow, clear of the next shape along it. Down
+            # the page in a diagram that reads across, out to the side in one that reads
+            # down; putting it along the flow in either case would sit it in the path of
+            # the following node.
+            main_size, cross_size = self.node_extent(a["kind"])
+            hf = self.frame(host)
+            a_main = hf["cx"] - main_size / 2 + k * ARTIFACT_PITCH
+            a_cross = hf["y"] + hf["h"] + ARTIFACT_GAP
+            b = self.box(a_main, a_cross, main_size, cross_size)
+            a["x"], a["y"], a["w"], a["h"] = b["x"], b["y"], b["w"], b["h"]
+            a["cx"] = a["x"] + a["w"] / 2
+            a["cy"] = a["y"] + a["h"] / 2
             # A node lends its pool to whatever hangs off it. A sequence flow does not:
             # an annotation on a flow is written at collaboration level, outside every
             # process, which is where Camunda Modeler puts it and therefore where a file
@@ -301,17 +368,31 @@ class Model:
 
     # -- định tuyến cạnh ------------------------------------------------------
     def route(self, flow: dict) -> list[tuple[float, float]]:
-        if "waypoints" in flow:
-            return flow["waypoints"]
-        s, t = self.nodes[flow["src"]], self.nodes[flow["dst"]]
-        # Waypoint do người viết đưa vào thì thắng bộ định tuyến, không bàn. Đây là cùng
-        # một luật với `row`/`col`: cái gì tác giả nói tường minh thì máy không đoán lại.
-        # Đường đi của một cạnh là chỗ chỉnh tay nhiều nhất trong Modeler, mà trước đây
-        # `bpmn-brief` vẽ lại từ đầu, nên mỗi vòng lặp lại xoá đúng phần vừa chỉnh.
+        """The path of one sequence flow, in page coordinates.
+
+        Waypoint do người viết đưa vào thì thắng bộ định tuyến, không bàn. Đây là cùng
+        một luật với `row`/`col`: cái gì tác giả nói tường minh thì máy không đoán lại.
+        Đường đi của một cạnh là chỗ chỉnh tay nhiều nhất trong Modeler, mà trước đây
+        `bpmn-brief` vẽ lại từ đầu, nên mỗi vòng lặp lại xoá đúng phần vừa chỉnh.
+
+        Everything else is routed in the flow's own frame and mapped back here. The router
+        below therefore only ever has to know one direction of travel; "leaves the right
+        face and turns down" reads as "leaves the bottom face and turns right" in a diagram
+        that reads downwards, without a second copy of the logic to disagree with the first.
+        """
         given = flow.get("waypoints")
         if given:
             return [(float(x), float(y)) for x, y in given]
+        return [self.xy(m, c) for m, c in self.route_frame(flow)]
 
+    def route_frame(self, flow: dict) -> list[tuple[float, float]]:
+        """The path of one sequence flow in the flow's own frame.
+
+        `x` runs along the flow and `y` across the lanes, so within this method "right" is
+        forward, "down" is towards the next lane, and every mode below keeps the meaning it
+        had when the only direction was left to right.
+        """
+        s, t = self.frame(self.nodes[flow["src"]]), self.frame(self.nodes[flow["dst"]])
         mode = flow.get("route", "auto")
         sc, tc = (s["cx"], s["cy"]), (t["cx"], t["cy"])
 
@@ -396,11 +477,16 @@ class Model:
                     "        A message flow has to join two elements that exist; check the"
                     " id for a typo, or give `waypoints:` if you want to route it yourself."
                 )
+        # Routed in the flow's own frame like every other edge, then mapped back. A black
+        # box band lies across the flow whichever way the diagram reads, so in this frame
+        # it is always the band above or below and there is only one geometry to write.
         if src_is_band != dst_is_band:
-            return self.message_route_node_to_band(m, pool_bounds)
-        if not src_is_band:
-            return self.message_route_node_to_node(m)
-        return self.message_route_band_to_band(m, pool_bounds)
+            pts = self.message_route_node_to_band(m, pool_bounds)
+        elif not src_is_band:
+            pts = self.message_route_node_to_node(m)
+        else:
+            pts = self.message_route_band_to_band(m, pool_bounds)
+        return [self.xy(main, cross) for main, cross in pts]
 
     def message_route_node_to_band(
         self, m: dict, pool_bounds: dict
@@ -414,7 +500,7 @@ class Model:
         """
         node_id = m["dst"] if m["src"] in pool_bounds else m["src"]
         pool_id = m["src"] if m["src"] in pool_bounds else m["dst"]
-        n, p = self.nodes[node_id], pool_bounds[pool_id]
+        n, p = self.frame(self.nodes[node_id]), self.frame(pool_bounds[pool_id])
         off = m.get("offset", 0)
         stub = m.get("stub", MESSAGE_STUB)
         band_is_below = p["y"] > n["y"]
@@ -446,7 +532,7 @@ class Model:
         modeler draws by hand. `offset` shifts that middle segment along the crossing axis
         when two message flows would otherwise land on top of each other.
         """
-        s, t = self.nodes[m["src"]], self.nodes[m["dst"]]
+        s, t = self.frame(self.nodes[m["src"]]), self.frame(self.nodes[m["dst"]])
         off = m.get("offset", 0)
         gap_x = max(t["x"] - (s["x"] + s["w"]), s["x"] - (t["x"] + t["w"]))
         gap_y = max(t["y"] - (s["y"] + s["h"]), s["y"] - (t["y"] + t["h"]))
@@ -476,7 +562,7 @@ class Model:
         share, which for the usual full-width bands is the middle of the diagram, and
         falls back to the midpoint of the two centres when they do not overlap at all.
         """
-        a, b = pool_bounds[m["src"]], pool_bounds[m["dst"]]
+        a, b = self.frame(pool_bounds[m["src"]]), self.frame(pool_bounds[m["dst"]])
         lo = max(a["x"], b["x"])
         hi = min(a["x"] + a["w"], b["x"] + b["w"])
         x = (lo + hi) / 2 if hi > lo else (a["x"] + a["w"] / 2 + b["x"] + b["w"] / 2) / 2
@@ -640,11 +726,14 @@ class Model:
         # --- diagram ---
         A(f'  <bpmndi:BPMNDiagram id="BPMNDiagram_1">')
         A(f'    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="{self.plane_element}">')
+        # The reading direction lives on the DI, not on the semantic model: a pool is a
+        # pool either way, it is the shape that says which way it is turned.
+        is_horizontal = "true" if self.horizontal else "false"
         for p in drawn_pools:
             b = self.pool_bounds[p["id"]]
             A(
                 f'      <bpmndi:BPMNShape id="Shape_{p["id"]}" bpmnElement="{p["id"]}"'
-                f' isHorizontal="true">'
+                f' isHorizontal="{is_horizontal}">'
             )
             A(self.bounds(b, 8))
             A("      </bpmndi:BPMNShape>")
@@ -654,7 +743,7 @@ class Model:
                 lb = self.lane_bounds[ln["id"]]
                 A(
                     f'      <bpmndi:BPMNShape id="Shape_{ln["id"]}" bpmnElement="{ln["id"]}"'
-                    f' isHorizontal="true">'
+                    f' isHorizontal="{is_horizontal}">'
                 )
                 A(self.bounds(lb, 8))
                 A("      </bpmndi:BPMNShape>")
@@ -694,11 +783,19 @@ class Model:
                 A("        </bpmndi:BPMNLabel>")
             elif n["kind"] in EVENT_KINDS or n["kind"] in GATEWAY_KINDS:
                 if n.get("name"):
-                    lw = 110
+                    # The label sits clear of the flow: under the shape when the process
+                    # reads across, beside it when the process reads down. A label box does
+                    # not turn with the diagram, text is wide either way, so this is placed
+                    # rather than mapped.
+                    lw, lh = 110, 27
+                    if self.horizontal:
+                        lx, ly = node["cx"] - lw / 2, node["y"] + node["h"] + 6
+                    else:
+                        lx, ly = node["x"] + node["w"] + 6, node["cy"] - lh / 2
                     A("        <bpmndi:BPMNLabel>")
                     A(
-                        f'          <dc:Bounds x="{node["cx"] - lw / 2:.0f}"'
-                        f' y="{node["y"] + node["h"] + 6:.0f}" width="{lw}" height="27" />'
+                        f'          <dc:Bounds x="{lx:.0f}" y="{ly:.0f}"'
+                        f' width="{lw}" height="{lh}" />'
                     )
                     A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNShape>")

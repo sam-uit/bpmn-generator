@@ -6,6 +6,8 @@ Rules this repository follows. They are rules rather than preferences: if someth
 
 **English only.** Documentation, code comments, docstrings, strings printed to the user, error and hint text raised through `SystemExit`, argparse help, commit messages, changelog entries. All of it.
 
+Commit messages are included in that list and are the easiest part of it to forget, because a commit message is not in any file you reopen later. It is documentation that outlives the diff it describes, so it follows the same rule the documentation does.
+
 This rule was adopted on 2026-08-20. The repository grew out of a Vietnamese-language report project, so a large amount of Vietnamese prose is still in `src/` and `docs/`. That backlog is scheduled for one planned translation pass and is deliberately **not** fixed piecemeal while doing other work, because a half-translated file is harder to read than a consistently Vietnamese one. Anything **newly written** is English from the start.
 
 One thing this rule does not touch: the **id slugs** in a brief are Vietnamese without diacritics, because they are made from the process step names the author wrote, and `task-user-lap-ke-hoach` is the name of a real step rather than a piece of English prose. The convention that produces them is documented in [`docs/naming.md`](docs/naming.md).
@@ -55,7 +57,7 @@ Every dependency is either synchronised automatically or described explicitly at
 for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done
 ```
 
-The five files are `test_ids.py` (id convention, 24 assertions), `test_markers.py` (activity markers, 17), `test_message_routes.py` (message flow geometry, 20), `test_rotate.py` (orientation transpose, 19) and `test_roundtrip.py` (yaml to bpmn to yaml is lossless, 24). They are plain scripts with no test-runner dependency, so `PYTHONPATH=src python3` is enough and `uv run` is not required; each prints a count and exits non-zero if any of its cases failed.
+The six files are `test_ids.py` (id convention, 24 assertions), `test_markers.py` (activity markers, 17), `test_message_routes.py` (message flow geometry, 20), `test_rotate.py` (orientation transpose, 19), `test_roundtrip.py` (yaml to bpmn to yaml is lossless, 24) and `test_vertical.py` (the vertical layout mode, 21). They are plain scripts with no test-runner dependency, so `PYTHONPATH=src python3` is enough and `uv run` is not required; each prints a count and exits non-zero if any of its cases failed.
 
 The round-trip test is the one that guards the workflow itself. The improvement loop only works while `.yaml` to `.bpmn` to `.yaml` comes back byte-identical apart from `source`; the moment a coordinate is dropped, the author's manual work in the modeler is silently lost on the next pass.
 

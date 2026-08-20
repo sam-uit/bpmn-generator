@@ -85,9 +85,12 @@ Một vòng `<ten>.yaml` $\rightarrow$ `.bpmn` $\rightarrow$ `<ten>.yaml` giữ 
 - **mọi phần tử**, kể cả kho dữ liệu và ghi chú (chúng được treo lại dưới phần tử chủ);
 - **nhánh mặc định** của mọi cổng rẽ điều kiện;
 - **behaviour marker** của activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`;
-- **toạ độ**: `bounds` của mọi shape, `waypoints` của mọi cạnh, `label` của node và cạnh, và màu hex `fill`/`stroke`.
+- **toạ độ**: `bounds` của mọi shape, `waypoints` của mọi cạnh, `label` của node và cạnh, và màu hex `fill`/`stroke`;
+- **the reading direction**, `horizontal:` on each pool. Until v0.6.0 this was the one thing the `.yaml` stated and `bpmn-brief` ignored, so a vertical model came back horizontal and the author lost the single largest decision made about the page.
 
 Chạy vòng thứ hai trên cùng một file cho ra `.yaml` **giống hệt**, nếu không, đó là lỗi.
+
+To lay a model out in the other direction, set `horizontal: false` on its pools, delete the `bounds` and `waypoints` you want recomputed, and generate again. What comes out is a vertical layout rather than a horizontal one turned on its side: the pitch along the flow is measured from the height of a task rather than its width, and the lanes are as thick as the shapes are wide. `bpmn-rotate` is still the tool for turning a diagram that is already arranged the way you want; this is the tool for generating one that way from the start.
 
 Toạ độ chỉ được **tính** khi file chưa có sẵn, tức là ở vòng đầu tiên từ một brief. Từ vòng hai trở đi, `.yaml` do `bpmn2yaml` sinh ra đã mang theo `bounds` và `waypoints`, và những gì nó mang theo thì đi thẳng vào file kết quả: cùng một luật với `row`/`col`, người viết luôn thắng máy. Muốn bỏ toạ độ và bố cục lại từ đầu thì xoá các khoá `bounds`/`waypoints` khỏi `.yaml`.
 

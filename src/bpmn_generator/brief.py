@@ -321,6 +321,8 @@ def to_spec(brief: dict, source: str) -> dict:
             is_blackbox = not p.get("lanes")
         if is_blackbox:
             bb = dict(id=pid, name=p.get("name", pid), blackbox=True)
+            if "horizontal" in p:
+                bb["horizontal"] = bool(p["horizontal"])
             if p.get("bounds"):
                 bb["bounds"] = p["bounds"]
             pools.append(bb)
@@ -348,6 +350,11 @@ def to_spec(brief: dict, source: str) -> dict:
             process=p.get("process", "Process_" + pid),
             lanes=lanes,
         )
+        # The reading direction of the diagram. `bpmn2yaml` writes it per pool from the
+        # DI, and until now `build.py` ignored it and drew every model left to right, so a
+        # vertical model silently came back horizontal.
+        if "horizontal" in p:
+            entry["horizontal"] = bool(p["horizontal"])
         if p.get("bounds"):
             entry["bounds"] = p["bounds"]
         pools.append(entry)

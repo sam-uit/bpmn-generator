@@ -32,7 +32,11 @@ Trình vẽ đồ hoạ tốt cho một sơ đồ, dở cho hai mươi sơ đồ
 
 Phép biến đổi là chuyển vị `(x, y) → (y, x)`, không phải phép quay: quay 90 độ thì hoặc dòng chảy chạy ngược, hoặc lane đầu tiên rơi xuống cuối. Chỗ tinh tế là **khung thì hoán kích thước, ký hiệu thì không**: pool 3000×250 phải thành 250×3000, còn task thì vẫn 100×80, vì BPMN luôn vẽ task rộng hơn cao bất kể sơ đồ đi theo phương nào.
 
-Kết quả là bố cục ngang đã chuyển vị, không phải bố cục dọc sinh ra từ đầu, nên các điểm gãy giữa cạnh giữ nguyên chỗ cũ. Đổi lại, nó chạy được với mọi file `.bpmn` kể cả file có subprocess hay group. Bố cục dọc thật thì nằm trong [`docs/TODO.md`](docs/TODO.md).
+Kết quả là bố cục ngang đã chuyển vị, không phải bố cục dọc sinh ra từ đầu, nên các điểm gãy giữa cạnh giữ nguyên chỗ cũ. Đổi lại, nó chạy được với mọi file `.bpmn` kể cả file có subprocess hay group.
+
+Since v0.6.0 there is a second way, and the two are for different situations. `bpmn-rotate` turns a finished diagram, coordinates and all, and never asks what the shapes mean. `bpmn-brief` now **lays out** in whichever direction the `.yaml` states: set `horizontal: false` on a pool, drop the `bounds` and `waypoints` you want recomputed, and generate again. That is a layout in its own right rather than a turned one, which shows in the numbers: the same brief comes out 532×380 read across and 380×492 read down, not 380×532, because the pitch along the flow is measured from the height of a task when the flow runs down and from its width when it runs across.
+
+Reach for `bpmn-rotate` to turn a diagram you have already arranged by hand, and for `horizontal:` to generate one in the direction you want from the start.
 
 ## Vòng làm việc
 
@@ -112,7 +116,7 @@ Cùng tinh thần, `bpmn-id` không tự rút gọn một nhãn mười âm ti�
 ```bash
 uv sync                                          # môi trường phát triển
 uv run bpmn-lint <file>                          # chạy thẳng từ repo
-for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 104 khẳng định
+for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 125 khẳng định
 ```
 
 Dùng từ một dự án khác, khai path dependency, để sửa thư viện là dự án thấy ngay:

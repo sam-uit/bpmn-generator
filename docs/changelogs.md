@@ -2,6 +2,34 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.6.0
+
+**The vertical layout mode, and the last thing the `.yaml` said that `build.py` ignored**
+
+`bpmn2yaml` has always written `horizontal:` on every pool, because that is where BPMN keeps the reading direction, on each participant's shape. `build.py` hard-coded `isHorizontal="true"` and knew one layout. A vertical model therefore went in vertical and came back horizontal, which broke the improvement loop on the single largest decision an author makes about a page, and did it silently.
+
+**It is a layout, not a transpose.** That distinction is the whole reason this was a feature rather than four lines calling into `bpmn-rotate`. A transposed horizontal layout spaces its columns by the *width* of a task, because that is what the columns were spaced by before they were turned. A diagram that reads downwards should space them by a task's *height*, since that is the extent a task actually occupies along the flow. The same brief now comes out 532×380 read across and 380×492 read down; a transpose would have given 380×532.
+
+The mechanism is one idea applied everywhere: **lay out and route in the flow's own frame, and map to the page once, at the end.**
+
+- `xy(main, cross)` maps a point from that frame to the page, and `frame(box)` reads a page rectangle back into it. `main` runs along the flow, `cross` runs across the lanes.
+- `node_extent(kind)` gives a shape's extent along and across the flow. A task is 100 by 80 whichever way the process reads, so reading down it occupies 80 along the flow and 100 across it, and that swap is where the tighter geometry comes from.
+- `layout()` is written entirely in that frame. Columns advance along `main`, lanes stack along `cross`, and the pool header always runs along the start of the flow, which is down the left side of a pool that reads across and along the top of one that reads down.
+- `route()` splits into a mapping shell and `route_frame()`, which is the old router unchanged. Inside it "right" means forward and "down" means towards the next lane, so every mode keeps the meaning it had when the only direction was left to right. There is no second copy of the routing logic to disagree with the first.
+- The message routers moved into the same frame. A black box band lies across the flow whichever way the diagram reads, so in that frame it is always the band above or below, and there is still only one geometry to write.
+
+Two things are placed rather than mapped, because they do not turn with the diagram. A label box is wide either way, so an event's name goes under the shape when the flow runs across and beside it when the flow runs down; mapping would have put it where the next shape goes. An artifact hangs across the flow for the same reason.
+
+`isHorizontal` is now written from the model instead of being asserted, on the pool shape and on every lane shape, which also means a modeler can no longer be handed a pool turned one way with its lanes turned the other.
+
+Measured, not asserted. Every horizontal model in the fixtures rebuilds **byte-identical** to v0.5.6, so nothing about the existing behaviour moved. `tests/fixtures/vertical-pools.bpmn` now round-trips byte-identical for the first time: `horizontal` was the last key that differed after v0.5.4 closed the pool bug. A generated vertical model is a fixed point after one pass.
+
+**`tests/test_vertical.py`**, 21 assertions, written to tell a layout from a transpose: the pool is *not* the horizontal pool with its sides swapped, a task is still 100 by 80, lanes stand side by side starting at the same height, every sequence flow ends lower down the page than it starts, the black box is a column beside the pool, the message flow crosses at a constant height between the two facing edges, and the event label sits beside its shape rather than under it.
+
+With this the open list is empty. Everything `bpmn2yaml` writes into a `.yaml` is now something `bpmn-brief` reads back.
+
+`CONTRIBUTING.md` also spells out that the English-only rule covers commit messages. It was already in the list and was still the part that got missed, because a commit message is not in any file anybody reopens.
+
 ## v0.5.6
 
 **A model with no pool is a model**
