@@ -112,7 +112,7 @@ Cùng tinh thần, `bpmn-id` không tự rút gọn một nhãn mười âm ti�
 ```bash
 uv sync                                          # môi trường phát triển
 uv run bpmn-lint <file>                          # chạy thẳng từ repo
-for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 99 khẳng định
+for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 104 khẳng định
 ```
 
 Dùng từ một dự án khác, khai path dependency, để sửa thư viện là dự án thấy ngay:

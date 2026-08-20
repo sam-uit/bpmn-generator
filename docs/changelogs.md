@@ -2,6 +2,24 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.6
+
+**A model with no pool is a model**
+
+A plain process with no collaboration is legitimate BPMN and it is what a modeler writes for a diagram with no pool drawn on it. `bpmn2yaml` converted one happily, writing `pools: []`, and then `bpmn-brief` left every node with no lane and `layout()` died on `KeyError: None`. A crash on valid input, with a message about a missing dictionary key, on the simplest kind of diagram there is.
+
+The fix reuses the implicit band from v0.5.4 one level up: a model with no real pool gets **one implicit pool holding one implicit band**. Layout, routing and the process body then work unchanged, because from their point of view there is a pool like any other. Neither is written to XML.
+
+What comes out is the shape that went in: no `<bpmn:collaboration>` at all, one bare `<bpmn:process>`, and the `BPMNPlane` pointing at that process rather than at a collaboration. An empty collaboration would have been legal and one line cheaper, but reading it back would invent a participant the author never drew, and inventing elements is the thing the whole round trip exists to prevent.
+
+One consequence had to be handled rather than inherited: an artifact with no pool is normally written in the collaboration, and with no collaboration there is nowhere for it to go. In a poolless model those artifacts join the one process.
+
+Checked on `tests/fixtures/leading-comment.bpmn` from typst-bpmn, which is exactly this shape: it now builds, and every bound and waypoint comes back identical. The only additions are label boxes for the two named events, which the emitter has always written when a file arrives without them.
+
+**`tests/test_roundtrip.py`** gains five assertions: no collaboration is written, exactly one process is, the plane points at it, the model comes back with no pool, and every node keeps its coordinates.
+
+With this the open list is down to one item, the vertical layout mode, and it is the only thing left that `bpmn2yaml` states in the `.yaml` and `bpmn-brief` still ignores.
+
 ## v0.5.5
 
 **An annotation can hang off a sequence flow again**
@@ -45,6 +63,8 @@ Measured on the fixtures rather than asserted: `b04-btvn01` now round-trips with
 **`tests/test_roundtrip.py`** gains six assertions on a two-pool document where one pool declares no lane: the process survives, both processes are written, no laneSet is invented, no node changes pool, and the pool comes back byte-identical.
 
 **Filed, not fixed**, both found by running the fixtures through: a text annotation attached to a *sequence flow* is dropped along with its associations, and a model with no pool at all still crashes. Both are in [`TODO.md`](TODO.md) with a reproducer.
+
+**Downstream**: this changes what `bpmn2yaml` writes, so it was checked against [typst-bpmn](https://github.com/sam-uit/typst-bpmn) rather than assumed. Its three YAML-fed golden cases (`b04-btvn01`, `vertical-pools`, `leading-comment`) gain only `process:` keys, which the Typst side ignores, and no `blackbox: true` at all, because every participant in them owns a process. No golden number moves. The one case that does hold black boxes, `two-blackboxes`, is loaded through the XML parser, which has always set that flag itself. Where a black box *does* reach the Typst side through YAML from now on, the two parsers agree where they used to differ: the XML reader marked it collapsed and the YAML path drew it as an ordinary empty pool.
 
 ## v0.5.3
 

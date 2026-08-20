@@ -326,6 +326,62 @@ eq([f for f in noted_back["flows"] if f["id"] == "a-note"],
    "the association keeps its waypoints through the loop")
 
 
+# --- a model with no pool at all ---------------------------------------------------------
+# A plain process with no collaboration is legitimate BPMN and is what a modeler writes for
+# a diagram with no pool drawn on it. `bpmn2yaml` converted it happily, writing `pools: []`,
+# and then `bpmn-brief` left every node with no lane and `layout()` died on `KeyError: None`.
+BARE = """\
+meta:
+  id: rt-bare
+  source: bare.bpmn
+  title: ""
+  layout: di
+
+pools: []
+
+nodes:
+  - id: event-start-b
+    name: Bat dau
+    kind: event
+    event: start
+    definition: none
+    throw: false
+    bounds: { x: 160, y: 100, w: 36, h: 36 }
+    label: { x: 143, y: 142, w: 70, h: 14 }
+  - id: task-none-b
+    name: Lam
+    kind: task
+    task: none
+    bounds: { x: 250, y: 78, w: 100, h: 80 }
+
+flows:
+  - id: b-f1
+    kind: sequence
+    source: event-start-b
+    target: task-none-b
+    waypoints: [[196, 118], [250, 118]]
+"""
+
+bare_src = yaml.safe_load(BARE)
+bare_xml, bare_back = cycle_xml(BARE, "bare")
+
+eq("<bpmn:collaboration" in bare_xml, False,
+   "no participant means no collaboration: an empty one would invent a pool nobody drew")
+eq(bare_xml.count("<bpmn:process "), 1,
+   "the nodes still need a process, and there is exactly one")
+eq('<bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">' in bare_xml, True,
+   "with no collaboration the diagram plane points at the process instead")
+
+for d in (bare_src, bare_back):
+    d["meta"].pop("source", None)
+    d["meta"].pop("extent", None)
+eq(bare_back["pools"], [],
+   "and it comes back with no pool, the same as it went in")
+eq({n["id"]: n["bounds"] for n in bare_back["nodes"]},
+   {n["id"]: n["bounds"] for n in bare_src["nodes"]},
+   "every node keeps its coordinates through a loop with no pool to anchor them")
+
+
 def main() -> int:
     bad = [c for c in CASES if not c[0]]
     for ok, why, got, want in CASES:

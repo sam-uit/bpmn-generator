@@ -352,6 +352,21 @@ def to_spec(brief: dict, source: str) -> dict:
             entry["bounds"] = p["bounds"]
         pools.append(entry)
 
+    if not any(not p.get("blackbox") for p in pools):
+        # A plain process with no collaboration is legitimate BPMN, and it is what a
+        # modeler produces for a diagram with no pool drawn on it. Give it one implicit
+        # pool holding one implicit band, so the layout, the routing and the process body
+        # all work unchanged. Neither is written to XML: the file comes out as a bare
+        # `<bpmn:process>` with no participant, which is the shape it went in as.
+        pools.append(dict(
+            id="__process__",
+            name="",
+            process=meta.get("process", "Process_1"),
+            implicit=True,
+            lanes=[dict(id="__band__", name="", rows=1, implicit=True)],
+        ))
+        lane_of_pool["__band__"] = "__process__"
+
     # Default band for a node that names no lane: the first band of the pool it says it
     # belongs to, and only then the first band of the model. A node in a pool with no lane
     # set names a `pool:` and no `lane:`, so reaching straight for the first band of the

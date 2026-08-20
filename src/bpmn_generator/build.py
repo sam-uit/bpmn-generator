@@ -504,8 +504,15 @@ class Model:
         )
 
         # --- collaboration ---
-        A(f'  <bpmn:collaboration id="{s["collaboration"]}">')
-        for p in self.pools:
+        # A model with no participant needs no collaboration: what comes out is a bare
+        # `<bpmn:process>`, and the diagram plane points at that process instead. An empty
+        # collaboration would be legal but it would also be a lie, and reading it back
+        # would invent a pool the author never drew.
+        drawn_pools = [p for p in self.pools if not p.get("implicit")]
+        self.plane_element = s["collaboration"] if drawn_pools else self.pools[0]["process"]
+        if drawn_pools:
+            A(f'  <bpmn:collaboration id="{s["collaboration"]}">')
+        for p in drawn_pools:
             if p.get("blackbox"):
                 A(f'    <bpmn:participant id="{p["id"]}" name="{attr(p["name"])}" />')
             else:
@@ -523,6 +530,12 @@ class Model:
         # message flows. That is the case for an annotation hanging off a sequence flow:
         # it comments on the flow, not on either process, and it has no process to live in.
         loose = [a for a in self.artifacts.values() if not a.get("pool")]
+        if not drawn_pools:
+            # No collaboration to hold them, so they belong to the one process, which is
+            # written below; leaving them here would drop them on the floor.
+            for a in loose:
+                a["pool"] = self.pools[0]["id"]
+            loose = []
         for a in loose:
             L.extend(self.artifact_lines(a, 4))
         loose_ids = {a["id"] for a in loose}
@@ -530,7 +543,8 @@ class Model:
             if lk.get("kind") != "association" or lk["art"] not in loose_ids:
                 continue
             L.extend(self.association_lines(lk, 4))
-        A("  </bpmn:collaboration>")
+        if drawn_pools:
+            A("  </bpmn:collaboration>")
 
         # --- process ---
         for p in self.pools:
@@ -625,8 +639,8 @@ class Model:
 
         # --- diagram ---
         A(f'  <bpmndi:BPMNDiagram id="BPMNDiagram_1">')
-        A(f'    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="{s["collaboration"]}">')
-        for p in self.pools:
+        A(f'    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="{self.plane_element}">')
+        for p in drawn_pools:
             b = self.pool_bounds[p["id"]]
             A(
                 f'      <bpmndi:BPMNShape id="Shape_{p["id"]}" bpmnElement="{p["id"]}"'
