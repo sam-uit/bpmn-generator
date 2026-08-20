@@ -48,7 +48,7 @@ Brief chỉ dùng **một lần**. Sau vòng đầu, thứ bạn sửa là file 
                         └──────► [bpmn-brief] ◄───────────┘
 ```
 
-Một vòng giữ nguyên **mọi id** (node, sequence flow, message flow, data association), **mọi phần tử** kể cả kho dữ liệu và ghi chú, và **nhánh mặc định** của mọi cổng. Toạ độ thì không, mỗi lần sinh là bố cục lại, nên bước Modeler nằm *trong* vòng lặp. Toàn bộ: [`docs/workflow.md`](docs/workflow.md).
+Một vòng giữ nguyên **mọi id** (node, sequence flow, message flow, data association), **mọi phần tử** kể cả kho dữ liệu và ghi chú, **nhánh mặc định** của mọi cổng, và **mọi toạ độ bạn đã chỉnh tay trong Modeler**: `bounds`, `waypoints`, vị trí nhãn, màu. Cái gì `.yaml` nói tường minh thì thắng thuật toán, cùng một luật với `row`/`col`. Toàn bộ: [`docs/workflow.md`](docs/workflow.md).
 
 Dùng như thư viện:
 

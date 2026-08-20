@@ -2,6 +2,40 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.0
+
+**Vòng lặp cải tiến giữ đúng thứ người vẽ đã chỉnh** `#bug` `#high`
+
+`bpmn-brief` bỏ qua mọi toạ độ có sẵn trong `.yaml` và vẽ lại từ đầu. Với `bounds` thì thường không thấy, vì bố cục tất định nên chạy lại ra đúng chỗ cũ; với `waypoints` thì thấy ngay, vì đường đi của một cạnh là chỗ được chỉnh tay nhiều nhất trong Modeler. Một cung rời cổng từ *cạnh dưới* đi vòng xuống, sinh lại thành cung rời từ *cạnh phải* rồi bẻ khúc.
+
+Đây không phải chuyện thẩm mỹ. Vòng lặp cải tiến của bộ công cụ này nằm ở chỗ người vẽ chỉnh tay trong Modeler rồi quay lại sửa `.yaml`, nên mỗi lần sinh lại xoá đúng phần vừa chỉnh, và công cụ chống lại chính quy trình nó phục vụ. Tài liệu có nói "toạ độ cố ý không giữ", nhưng câu đó chỉ đúng cho vòng đầu tiên, khi `.yaml` chưa có toạ độ nào.
+
+Nay mọi thứ người viết đưa vào đều thắng thuật toán, đúng cùng một luật với `row`/`col`. Cụ thể, những thứ trước đây bị vẽ lại và giờ đi thẳng qua:
+
+| | Trước | Nay |
+| --- | --- | --- |
+| `waypoints` của sequence flow | định tuyến lại | dùng nguyên |
+| `waypoints` của message flow | định tuyến lại | dùng nguyên |
+| `waypoints` của data association | nối thẳng chủ tới artifact | dùng nguyên |
+| `bounds` của node, pool, lane, black box, artifact | tính từ lưới | dùng nguyên |
+| `label` của node, cạnh, artifact | tính từ tâm | dùng nguyên |
+| `fill` / `stroke` hex | chỉ hiểu tên trong bảng màu | dùng nguyên, và thắng bảng màu |
+| `marker` của cổng loại trừ (`isMarkerVisible`) | mất | giữ |
+
+Ghim một nửa thì phần được ghim nằm ở chỗ Modeler đặt, phần còn lại ở chỗ lưới tính, và hai hệ toạ độ đó không biết nhau. `bpmn-brief` nay in `[chú ý]` khi gặp trường hợp đó thay vì lặng lẽ cho ra một hình chồng lấn.
+
+Ba lỗi nhỏ hơn lộ ra trong lúc đo:
+
+**Ngắt dòng trong tên bị nuốt.** `name="Phân loại\nhướng xử lý"` ghi ký tự xuống dòng trần vào một thuộc tính XML. Hợp lệ về cú pháp, nhưng bộ phân tích *chuẩn hoá giá trị thuộc tính* và biến nó thành dấu cách, nên ngắt dòng người vẽ đặt biến mất sau mỗi vòng. Nay mã hoá thành `&#10;`.
+
+**Toạ độ lẻ bị làm tròn.** Mọi toạ độ đều in `%.0f`, hợp lý khi tất cả đều do lưới sinh ra. Nhưng Modeler đặt nhãn ở nửa đơn vị (`x="903.5"`), nên khi `bounds` đi thẳng từ file vào thì làm tròn là sửa dữ liệu của người vẽ.
+
+**`exporterVersion` đứng yên ở "0.1.0"** qua ba lần phát hành, tức là nó nói sai chứ không phải nói thiếu. Số phiên bản chuyển vào `_version.py`, một chỗ duy nhất cho cả `__init__` lẫn `build`.
+
+Đo trên năm mô hình L3 của báo cáo: vòng `yaml → bpmn → yaml` nay **không mất một dòng nội dung nào**. Phần còn khác chỉ là thứ tự của data association trong danh sách `flows`, vì BPMN bắt chúng nằm bên trong activity chứ không nằm cùng chỗ với sequence flow. Mô hình thứ sáu (Kế Hoạch Khuyến Mãi) vẫn dừng ở `group`, đúng như bảng "chưa qua được vòng lặp" đã ghi.
+
+Thêm `tests/test_roundtrip.py`, 8 khẳng định, gồm cả vòng thứ hai để chắc rằng bất biến không phải chuyện may.
+
 ## v0.4.0
 
 **`bpmn-rotate`, đổi phương của sơ đồ** `#feat` `#high`

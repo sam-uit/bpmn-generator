@@ -2,7 +2,7 @@
 
 Tài liệu này mô tả **vòng làm việc của người dựng sơ đồ**, không phải nội bộ của công cụ. Đọc xong là biết chạy lệnh nào, ở bước nào, và sửa file nào.
 
-Sơ đồ nguồn của quy trình này nằm ở [`bpmnworkflow.bpmn`](./bpmnworkflow.bpmn), chính nó cũng được dựng bằng quy trình này. Chạy `bpmn-lint` lên nó sẽ ra chín lỗi: cả chín đều là *cùng một* hạn chế của bộ kiểm. nó chưa biết một `subProcess` là một phạm vi riêng, nên vừa coi subprocess là node cô lập, vừa coi start/end event bên trong là node của phạm vi ngoài. Xem "Cái gì chưa qua được vòng lặp" ở cuối trang.
+Sơ đồ nguồn của quy trình này nằm ở [`bpmnworkflow.bpmn`](bpmnworkflow.bpmn), chính nó cũng được dựng bằng quy trình này. Chạy `bpmn-lint` lên nó sẽ ra chín lỗi: cả chín đều là *cùng một* hạn chế của bộ kiểm. nó chưa biết một `subProcess` là một phạm vi riêng, nên vừa coi subprocess là node cô lập, vừa coi start/end event bên trong là node của phạm vi ngoài. Xem "Cái gì chưa qua được vòng lặp" ở cuối trang.
 
 ## Toàn cảnh
 
@@ -84,13 +84,16 @@ Một vòng `<ten>.yaml` $\rightarrow$ `.bpmn` $\rightarrow$ `<ten>.yaml` giữ 
 - **mọi id**: node, sequence flow, message flow, data association;
 - **mọi phần tử**, kể cả kho dữ liệu và ghi chú (chúng được treo lại dưới phần tử chủ);
 - **nhánh mặc định** của mọi cổng rẽ điều kiện;
-- **behaviour marker** của activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`.
+- **behaviour marker** của activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`;
+- **toạ độ**: `bounds` của mọi shape, `waypoints` của mọi cạnh, `label` của node và cạnh, và màu hex `fill`/`stroke`.
 
 Chạy vòng thứ hai trên cùng một file cho ra `.yaml` **giống hệt**, nếu không, đó là lỗi.
 
-Thứ **không** giữ được, và cố ý không giữ:
+Toạ độ chỉ được **tính** khi file chưa có sẵn, tức là ở vòng đầu tiên từ một brief. Từ vòng hai trở đi, `.yaml` do `bpmn2yaml` sinh ra đã mang theo `bounds` và `waypoints`, và những gì nó mang theo thì đi thẳng vào file kết quả: cùng một luật với `row`/`col`, người viết luôn thắng máy. Muốn bỏ toạ độ và bố cục lại từ đầu thì xoá các khoá `bounds`/`waypoints` khỏi `.yaml`.
 
-- **Toạ độ.** Mỗi lần sinh là bố cục lại từ đầu. Đó là lý do bước "Chỉnh tay trên Modeler" nằm *trong* vòng lặp chứ không nằm sau nó. Muốn ghim cứng một phần tử thì khai `row`/`col` cho nó, người viết luôn thắng máy.
+Ghim một nửa thì `bpmn-brief` in `[chú ý]`: phần được ghim nằm ở chỗ Modeler đặt, phần còn lại ở chỗ lưới tính, và hai hệ toạ độ đó không biết nhau nên hình có thể chồng lấn.
+
+Thứ **không** giữ được, và cố ý không giữ:
 - **Id của `<bpmn:process>`.** Nó không xuất hiện trên sơ đồ nên `bpmn2yaml` không ghi lại; vòng sau sinh ra `Process_<id-participant>`. Không có gì tham chiếu tới nó.
 
 ## Cái gì chưa qua được vòng lặp
