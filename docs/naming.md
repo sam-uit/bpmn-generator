@@ -1,230 +1,232 @@
-# Quy ước đặt id cho phần tử BPMN
+# The id convention for BPMN elements
 
-id của một phần tử BPMN không phải chuyện nội bộ của file mô hình: nó là thứ **người viết phải gõ lại bằng tay**.
+The id of a BPMN element is not an internal detail of the model file: it is the thing **an author has to type back in by hand**.
 
 ```typ
-#bpmn-span(M, from: "gateway-exclusive-phan-loai-huong-xu-ly", to: "task-send-gui-hang-ve-hang",
-           lane: "Kỹ Thuật Viên")
-#bpmn-span(M, from: "task-user-kiem-ton-kho", to: "task-user-cap-phat-linh-kien")
+#bpmn-span(M, from: "gateway-exclusive-triage-repair-route", to: "task-send-ship-unit-to-vendor",
+           lane: "Technicians")
+#bpmn-span(M, from: "task-user-check-parts-stock", to: "task-user-issue-parts")
 ```
 
 ```yaml
-- ask: Tại sao thời gian chờ linh kiện lâu?
-  node: gateway-exclusive-co-san-linh-kien      # whywhy neo vào đây
+- ask: Why is the wait for parts so long?
+  node: gateway-exclusive-parts-in-stock        # what the whywhy chain anchors to
 ```
 
-So với id cũ `Gateway_PhanLoai`, `Task_GuiHang`, `Gateway_CoLinhKien` thì dài hơn, nhưng đọc là biết ngay loại và phân loại con, không phải mở file mô hình ra tra.
+Compared with the old `Gateway_1`, `Task_3`, `Gateway_7`, these are longer, but reading one tells you the type and the subtype without opening the model file to look them up.
 
-Nên id phải tự nói được nó là cái gì. Ba mục tiêu, **đúng thứ tự ưu tiên**, khi hai mục tiêu xung khắc thì mục tiêu đứng trước thắng:
+So an id has to say what it is. Three goals, **in priority order**, and when two of them conflict the earlier one wins:
 
-1. **Duy nhất**:  hai phần tử không bao giờ trùng id.
-2. **Nhất quán**: cùng loại thì cùng khuôn, không ngoại lệ.
-3. **Tường minh**: đọc id biết ngay loại, phân loại con, và tên.
+1. **Unique**: no two elements ever share an id.
+2. **Consistent**: the same kind of element always has the same shape of id, with no exceptions.
+3. **Explicit**: reading the id tells you the type, the subtype, and the name.
 
-Công cụ: `bpmn-id` (kiểm tra + đổi tên hàng loạt), và `bpmn-lint` gọi nó sẵn trên mọi brief.
+The tools: `bpmn-id` (check and bulk rename), and `bpmn-lint`, which calls it on every brief.
 
-## Khuôn
+## The shape
 
 ```
 <type>-<subtype>-<subsubtype>-<name>[-<hash>]
 ```
 
-| Ô | Bắt buộc | Nội dung |
+| Slot | Required | Contents |
 | --- | --- | --- |
-| `type` | có | Loại phần tử, tập đóng, xem bảng dưới |
-| `subtype` | khi loại đó có | Phân loại con: `start`/`end`, `user`/`service`, `exclusive`/`parallel`… |
-| `subsubtype` | khi có | Với sự kiện: bắt/ném bằng gì (`message`, `timer`, `signal`…) |
-| `name` | có | Slug tiếng Việt không dấu, tối đa **5 âm tiết** |
-| `hash` | chỉ khi trùng | 6 ký tự băm, gắn cho **cả hai** phần tử trùng nhau |
+| `type` | yes | The element type, a closed set, see the table below |
+| `subtype` | when the type has one | The subtype: `start`/`end`, `user`/`service`, `exclusive`/`parallel`, and so on |
+| `subsubtype` | when there is one | For an event, what it catches or throws with (`message`, `timer`, `signal`, …) |
+| `name` | yes | A slug taken from the label, at most **5 syllables** |
+| `hash` | only on a collision | 6 hash characters, added to **both** of the colliding elements |
 
-Ô nào không có thì **bỏ hẳn**, không để chỗ trống:
-
-```
-task-lap-ke-hoach            ✓  task thường
-task-none-lap-ke-hoach       ✗  ô trống là chỗ để sai chính tả nảy sinh
-```
-
-Ví dụ đầy đủ:
+A slot with nothing in it is **left out entirely**, never filled with a placeholder:
 
 ```
-event-start-message-nhu-cau-bao-hanh     sự kiện · bắt đầu · bằng message
-event-intermediate-timer-het-han         sự kiện · giữa chừng · hẹn giờ
-task-user-lap-ke-hoach                   task · người dùng thao tác
-task-service-do-luong-kpi                task · hệ thống tự chạy
-gateway-exclusive-du-ngan-sach           cổng · loại trừ
-gateway-parallel-trien-khai-dong-thoi    cổng · song song
-participant-cong-ty-cptm-hong-ha         pool
-lane-phong-marketing                     lane
-flow-gwy-tsk-du-ngan-sach                luồng · từ gateway · tới task · nhãn nhánh
-message-tsk-prt-de-nghi-ho-tro           message flow · từ task · tới participant
-definitions-l03-management-ke-hoach-khuyen-mai    cấp file: lấy tên file
+task-lap-ke-hoach            ✓  an ordinary task
+task-none-lap-ke-hoach       ✗  an empty slot is where a typo goes to be born
 ```
 
-Ba id **cấp file** (`definitions`, `collaboration`, `process`) lấy *tên file* làm ô tên, không lấy tiêu đề quy trình: chúng không bao giờ bị gõ lại trong hàm, mà tên file thì đã ngắn, đã duy nhất trong repo, và mở ra là khớp ngay.
+**The slug follows the label's language.** It is the label, lower case, diacritics removed, hyphenated. A model whose labels are Vietnamese therefore has Vietnamese slugs without diacritics, and one whose labels are English has English slugs. Nothing in the grammar is language-specific, and the examples below are in English because this document is.
 
-Cùng lý do, id của **pool và lane** không bị chặn 5 âm tiết: hàm gọi lát cắt bằng *tên hiển thị* (`bpmn-figure(M, view: (lane: "Kho Vật Tư"))`), không bằng id. Chỉ những id thật sự bị gõ lại: task, event, gateway, mới phải ngắn.
+Worked examples:
 
-## Bảng từ khoá
+```
+event-start-message-warranty-request     event · start · by message
+event-intermediate-timer-window-expired  event · intermediate · timer
+task-user-draft-the-plan                 task · a person working on the system
+task-service-measure-kpi                 task · the system running by itself
+gateway-exclusive-within-budget          gateway · exclusive
+gateway-parallel-roll-out-together       gateway · parallel
+participant-hong-ha-trading-jsc          pool
+lane-marketing-department                lane
+flow-gwy-tsk-within-budget               flow · from a gateway · to a task · branch label
+message-tsk-prt-request-support          message flow · from a task · to a participant
+definitions-l03-management-promotion-plan    file level: takes the file name
+```
 
-### Ô 1: `type` (tập đóng)
+The three **file-level** ids (`definitions`, `collaboration`, `process`) take the *file name* as their name slot rather than the process title: they are never typed back into a function, the file name is already short and already unique within the repository, and opening the file confirms the match immediately.
 
-| Từ khoá | Viết tắt | Phần tử BPMN |
+For the same reason, the ids of **pools and lanes** are not capped at five syllables: a slice is requested by *display name* (`bpmn-figure(M, view: (lane: "Parts Store"))`), not by id. Only the ids that really do get typed again, tasks, events and gateways, have to be short.
+
+## The keyword tables
+
+### Slot 1: `type` (a closed set)
+
+| Keyword | Short form | BPMN element |
 | --- | --- | --- |
-| `collaboration` | (không có) | `<collaboration>`: khung chứa các pool |
-| `definitions` | (không có) | `<definitions>`: gốc của file |
+| `collaboration` | (none) | `<collaboration>`: the frame holding the pools |
+| `definitions` | (none) | `<definitions>`: the root of the file |
 | `event` | `evt` | `startEvent`, `intermediateCatch/ThrowEvent`, `endEvent`, `boundaryEvent` |
 | `flow` | `flw` `seq` | `sequenceFlow` |
-| `gateway` | `gwy` | mọi loại cổng |
+| `gateway` | `gwy` | every kind of gateway |
 | `lane` | `lnn` | `<lane>` |
 | `message` | `msg` | `messageFlow` |
-| `participant` | `prt` `poo` | `<participant>` (pool) |
+| `participant` | `prt` `poo` | `<participant>`, a pool |
 | `process` | `prc` | `<process>` |
 | `subprocess` | `sub` | `subProcess` |
-| `task` | `tsk` | mọi loại task |
+| `task` | `tsk` | every kind of task |
 
-### Ô 2: `subtype`
+### Slot 2: `subtype`
 
-**Sự kiện** (`event`)
+**Events** (`event`)
 
-| Từ khoá | Viết tắt | Nghĩa |
+| Keyword | Short form | Meaning |
 | --- | --- | --- |
-| `boundary` | `bdr` | Sự kiện biên, gắn vào một task |
-| `end` | `end` | Kết thúc |
-| `intermediate` | `int` | Giữa chừng (bắt hoặc ném) |
-| `start` | `stt` | Bắt đầu |
+| `boundary` | `bdr` | A boundary event, attached to a task |
+| `end` | `end` | End |
+| `intermediate` | `int` | Intermediate, catching or throwing |
+| `start` | `stt` | Start |
 
-**Task** (`task`, `subprocess`)
+**Tasks** (`task`, `subprocess`)
 
-| Từ khoá | Viết tắt | Nghĩa |
+| Keyword | Short form | Meaning |
 | --- | --- | --- |
-| `call` | `cal` | `callActivity`: gọi quy trình khác |
-| `manual` | `man` | Việc tay, không có hệ thống hỗ trợ |
-| `receive` | `rcv` | Chờ nhận message |
-| `rule` | `rul` | `businessRuleTask`, quyết định theo luật/DMN |
-| `script` | `scr` | Script chạy trong engine |
-| `send` | `snd` | Gửi message |
-| `service` | `svc` | Hệ thống tự thực hiện |
-| `user` | `usr` | Người thao tác trên hệ thống |
+| `call` | `cal` | `callActivity`: calls another process |
+| `manual` | `man` | Manual work, with no system support |
+| `receive` | `rcv` | Waits to receive a message |
+| `rule` | `rul` | `businessRuleTask`, a decision by rule or DMN |
+| `script` | `scr` | A script run in the engine |
+| `send` | `snd` | Sends a message |
+| `service` | `svc` | The system performs it by itself |
+| `user` | `usr` | A person working on the system |
 
-Task thường (`task: none` trong brief) **không có ô 2**.
+An ordinary task (`task: none` in a brief) **has no slot 2**.
 
-**Cổng** (`gateway`)
+**Gateways** (`gateway`)
 
-| Từ khoá | Viết tắt | Nghĩa |
+| Keyword | Short form | Meaning |
 | --- | --- | --- |
-| `complex` | `cmx` | Điều kiện hợp lưu phức tạp (nên tránh) |
-| `event` | `evt` | `eventBasedGateway`: rẽ theo sự kiện nào tới trước |
-| `exclusive` | `exc` | Đúng một nhánh |
-| `inclusive` | `inc` | Một hoặc nhiều nhánh |
-| `parallel` | `par` | Mọi nhánh |
+| `complex` | `cmx` | A complex merge condition, better avoided |
+| `event` | `evt` | `eventBasedGateway`: branches on whichever event arrives first |
+| `exclusive` | `exc` | Exactly one branch |
+| `inclusive` | `inc` | One or more branches |
+| `parallel` | `par` | Every branch |
 
-**Luồng** (`flow`, `message`) ô 2 và ô 3 là **loại của hai đầu**, viết tắt:
+For **flows** (`flow`, `message`), slots 2 and 3 are **the types of the two ends**, in short form:
 
 ```
-flow-gwy-tsk-...     từ gateway tới task
-flow-evt-gwy-...     từ event tới gateway
-message-tsk-prt-...  từ task tới participant
+flow-gwy-tsk-...     from a gateway to a task
+flow-evt-gwy-...     from an event to a gateway
+message-tsk-prt-...  from a task to a participant
 ```
 
-### Ô 3: `subsubtype` (chỉ sự kiện)
+### Slot 3: `subsubtype` (events only)
 
-| Từ khoá | Viết tắt | Nghĩa |
+| Keyword | Short form | Meaning |
 | --- | --- | --- |
-| `compensation` | `cmp` | Bù trừ |
-| `conditional` | `cnd` | Điều kiện dữ liệu thành true |
-| `error` | `err` | Lỗi nghiệp vụ |
-| `escalation` | `esc` | Chuyển cấp |
-| `link` | `lnk` | Nối hai chỗ trong cùng process |
-| `message` | `msg` | Nhận/gửi message |
-| `signal` | `sgn` | Tín hiệu phát rộng |
-| `terminate` | `trm` | Kết thúc tức thì toàn process |
-| `timer` | `tmr` | Hẹn giờ / chu kỳ |
+| `compensation` | `cmp` | Compensation |
+| `conditional` | `cnd` | A data condition becoming true |
+| `error` | `err` | A business error |
+| `escalation` | `esc` | Escalation |
+| `link` | `lnk` | Joins two points in the same process |
+| `message` | `msg` | Receiving or sending a message |
+| `signal` | `sgn` | A broadcast signal |
+| `terminate` | `trm` | Ends the whole process at once |
+| `timer` | `tmr` | A timer or a cycle |
 
-### Viết tắt xuất hiện ở đâu
+### Where the short forms appear
 
-**Chỉ ở hai ô loại của id luồng.** Mọi chỗ khác viết đủ chữ, id được đọc nhiều hơn được gõ, mà `flow-gateway-task-du-ngan-sach` thì dài hơn `flow-gwy-tsk-du-ngan-sach` mà không nói thêm gì.
+**Only in the two type slots of a flow id.** Everywhere else the word is written out: an id is read far more often than it is typed, and `flow-gateway-task-du-ngan-sach` is longer than `flow-gwy-tsk-du-ngan-sach` without saying anything more.
 
-Bảng viết tắt vẫn được **nhận ở đầu vào**: khai `kind: evt` trong brief thì công cụ tự mở ra thành `event`. Tiện lúc gõ, không ảnh hưởng id sinh ra.
+The short forms are still **accepted as input**: writing `kind: evt` in a brief expands to `event`. Convenient while typing, and it has no effect on the id that comes out.
 
-## Hai chỗ máy dừng lại
+## The two places the machine stops
 
-Ranh giới tự động hoá của repo: *máy chỉ sửa những gì không cần đặt tên; cái gì cần đặt tên thì dừng lại và báo.* Với id, có đúng hai chỗ như vậy.
+The repository's automation boundary: *the machine repairs what needs no naming; anything that needs a name stops and reports.* For ids there are exactly two of those.
 
-**`ID-NONAME`: phần tử không có `name`.** Không có gì để đặt vào ô tên, mà máy không được phép nghĩ ra một cái tên. Hay gặp nhất là cổng hợp lưu không nhãn:
-
-```
-? Gateway_HopTrienKhai
-```
-
-Cách xử lý: đặt tên cho nó (`name: Hợp lưu triển khai`), hoặc nếu cố ý để trống nhãn trên hình thì khai `slug: hop-trien-khai`, nhãn và id là hai chuyện khác nhau.
-
-**`ID-LONG`: nhãn dài hơn 5 âm tiết.** Chọn ba âm tiết nào đại diện cho một nhãn mười âm tiết *chính là đặt tên*. Cắt máy móc cho ra thứ tệ hơn id cũ:
+**`ID-NONAME`: an element with no `name`.** There is nothing to put in the name slot, and the machine is not allowed to invent one. The commonest case is an unlabelled merge gateway:
 
 ```
-"Lập bản thảo kế hoạch và dự trù kinh phí"
-  -> task-user-lap-ban-thao-ke-hoach-va      ✗ cụt ở một hư từ
+? Gateway_1f3a9c
 ```
 
-Cách xử lý: khai `slug:` trong brief, người viết luôn thắng máy (cùng nguyên tắc với `row`/`col`):
+What to do: give it a name (`name: Roll-out merge`), or, if the label is deliberately empty on the drawing, declare `slug: roll-out-merge`. A label and an id are two different things.
+
+**`ID-LONG`: a label longer than 5 syllables.** Choosing which three syllables stand for a ten-syllable label *is naming*. A mechanical truncation produces something worse than the old id:
+
+```
+"Draft the plan and estimate the budget for it"
+  -> task-user-draft-the-plan-and-estimate   ✗ cut off mid-phrase
+```
+
+What to do: declare `slug:` in the brief. The author always beats the machine, the same principle as `row`/`col`:
 
 ```yaml
-- id: task-user-lap-ke-hoach
-  name: Lập bản thảo kế hoạch và dự trù kinh phí
-  slug: lap-ke-hoach
+- id: task-user-draft-the-plan
+  name: Draft the plan and estimate the budget for it
+  slug: draft-the-plan
 ```
 
-### Mô hình không có brief: `<mô hình>-slugs.yaml`
+### A model with no brief: `<model>-slugs.yaml`
 
-Hai trong ba mô hình của báo cáo dựng từ spec Python, và `.bpmn` thì không có chỗ khai `slug:`. Bảng rút gọn của chúng nằm cạnh mô hình:
+Two of the report's three models were built from a Python spec, and a `.bpmn` has nowhere to declare `slug:`. Their slug table sits beside the model:
 
 ```
-content/processes/l03-core-xu-ly-bao-hanh.bpmn
-content/processes/l03-core-xu-ly-bao-hanh-slugs.yaml    <- {id: ô tên đã chọn}
+content/processes/l03-core-warranty-handling.bpmn
+content/processes/l03-core-warranty-handling-slugs.yaml    <- {id: the chosen name slot}
 ```
 
-`bpmnid.py` và `bpmn-lint` **tự tìm** file này theo tên, không cần cờ. Lý do nó phải tồn tại lâu dài chứ không chỉ lúc migrate: nếu bảng chỉ sống trong một lần chạy lệnh thì lần lint sau lại báo `ID-LONG` cho đúng những id đã cố ý rút gọn, cảnh báo sai lặp lại là cách nhanh nhất để người ta thôi đọc cảnh báo.
+`bpmn-id` and `bpmn-lint` **find this file by name**, with no flag needed. The reason it has to live on rather than exist only during a migration: if the table lived only inside one command run, the next lint would report `ID-LONG` for exactly the ids that were deliberately shortened, and a false warning that keeps coming back is the fastest way to teach somebody to stop reading warnings.
 
-Sinh khuôn ban đầu bằng `--propose-slugs`; máy chỉ chép nguyên nhãn xuống, rút gọn vẫn là việc của người:
+Generate the initial template with `--propose-slugs`. The machine only copies the labels down; shortening them is still a person's job:
 
 ```bash
-bpmn-id content/processes/<ten>.bpmn --propose-slugs /tmp/slugs.yaml
+bpmn-id content/processes/<name>.bpmn --propose-slugs /tmp/slugs.yaml
 ```
 
-### Cổng hợp lưu do máy chèn
+### Merge gateways inserted by the machine
 
-`bpmnrules.normalize()` chèn cổng hợp lưu khi có nhiều luồng vào một task. Cổng đó không có nhãn (đúng chuẩn BPMN), nên id lấy tên **bước nó đứng trước**, `gateway-exclusive-hop-lap-ke-hoach`, vì đó đúng là cách người đọc gọi nó: "cổng hợp lưu trước bước Lập kế hoạch".
+`rules.normalize()` inserts a merge gateway when several flows run into one task. That gateway has no label, which is correct BPMN, so its id takes the name of the **step it stands in front of**, `gateway-exclusive-merge-draft-the-plan`, because that is exactly what a reader calls it: "the merge gateway before Draft the plan".
 
-## Dùng công cụ
+## Using the tool
 
 ```bash
-# 1. Xem lệch chỗ nào (không ghi gì)
-bpmn-id content/processes/<ten>-brief.yaml
+# 1. See what is out of line (writes nothing)
+bpmn-id content/processes/<name>-brief.yaml
 
-# 2. Khai `slug:` cho các nhãn dài, đặt tên cho phần tử chưa có tên, chạy lại
+# 2. Declare `slug:` for the long labels, name the unnamed elements, run it again
 
-# 3. Đổi tên, nhớ liệt kê MỌI file có nhắc tới id
-bpmn-id content/processes/<ten>-brief.yaml --rename \
-    --also content/processes/<ten>.bpmn \
-           content/processes/<ten>.yaml \
+# 3. Rename, listing EVERY file that mentions an id
+bpmn-id content/processes/<name>-brief.yaml --rename \
+    --also content/processes/<name>.bpmn \
+           content/processes/<name>.yaml \
            content/chapter03.md \
-           content/analysis/wh-ch03-bao-hanh.yaml
+           content/analysis/wh-ch03-warranty.yaml
 
-# 4. Dựng lại và biên dịch để chắc không sót tham chiếu
-bpmn-brief <ten> && just report
+# 4. Regenerate and compile, to be sure no reference was missed
+bpmn-brief <name> && just report
 ```
 
-`--also` là chỗ dễ sai nhất: quên một file thì file đó còn giữ id cũ, và Typst **không báo lỗi**, `bpmn-span` với id không tồn tại chỉ đơn giản là bỏ qua phần tử đó. Sau khi đổi tên, luôn mở PDF xem hình còn đủ phần tử không.
+`--also` is the easiest thing to get wrong: miss a file and that file keeps the old id, and Typst **reports no error**, because `bpmn-span` given an id that does not exist simply skips that element. After a rename, always open the PDF and check the figure still has all its elements.
 
-## Kiểm ở đâu
+## Where it is tested
 
 ```bash
-python3 tests/test_ids.py      # kiểm thử chính công cụ (24 khẳng định)
+PYTHONPATH=src python3 tests/test_ids.py      # the tool itself, 24 assertions
 ```
 
-Mỗi khẳng định trong file đó tương ứng một quyết định thiết kế của tài liệu này, sửa quy ước thì phải sửa cả ở đó, và đó là chủ ý: quy ước không có lưới an toàn thì trôi.
+Each assertion in that file corresponds to one design decision in this document. Changing the convention means changing them too, and that is the point: a convention with no safety net drifts.
 
-`bpmn-lint` chạy trên `-brief.yaml` sẽ in cả luật cấu trúc lẫn id lệch quy ước.
+`bpmn-lint` on a `-brief.yaml` reports both the structural rules and the ids that break the convention.
 
-Trên `.bpmn` thì **không** kiểm id: file `.bpmn` đi qua Camunda Modeler có thể chứa id do Modeler tự sinh cho phần tử mới thêm, mà đó là chuyện của bước 3 trong quy trình vận hành ở repo báo cáo, không phải lỗi mô hình. Nguồn sự thật của id là brief; sửa ở brief rồi sinh lại.
+On a `.bpmn` it does **not** check ids: a file that has been through Camunda Modeler may contain ids the modeler generated for newly added elements, and that belongs to step 3 of the working loop rather than being a fault in the model. The source of truth for ids is the brief; fix it there and regenerate.
 
-Xem thêm: [`rules.md`](rules.md) (luật cấu trúc), `README.md` (quy ước đặt tên file).
+See also: [`rules.md`](rules.md) for the structural rules, and `README.md` for the file naming convention.

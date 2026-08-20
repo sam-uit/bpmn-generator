@@ -10,7 +10,7 @@ Commit messages are included in that list and are the easiest part of it to forg
 
 This rule was adopted on 2026-08-20. The repository grew out of a Vietnamese-language report project, so a large amount of Vietnamese prose is still in `src/` and `docs/`. That backlog is scheduled for one planned translation pass and is deliberately **not** fixed piecemeal while doing other work, because a half-translated file is harder to read than a consistently Vietnamese one. Anything **newly written** is English from the start.
 
-One thing this rule does not touch: the **id slugs** in a brief are Vietnamese without diacritics, because they are made from the process step names the author wrote, and `task-user-lap-ke-hoach` is the name of a real step rather than a piece of English prose. The convention that produces them is documented in [`docs/naming.md`](docs/naming.md).
+One thing this rule does not touch: an **id slug follows the language of the label it is made from**. The slug is the element's label, lower case, diacritics removed, hyphenated, so a model with Vietnamese labels has Vietnamese slugs and `task-user-lap-ke-hoach` is the name of a real step rather than a piece of English prose left untranslated. Nothing in the grammar is language-specific; an English-labelled model produces English slugs by the same rule. The convention is documented in [`docs/naming.md`](docs/naming.md), which teaches it in English while keeping the report's real ids as its worked examples.
 
 ## Naming and description
 

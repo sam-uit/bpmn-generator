@@ -70,26 +70,26 @@ No coordinates, no `row`/`col`, just what connects to what:
 
 ```yaml
 meta:
-  id: definitions-xu-ly-bao-hanh
-  title: Xử lý bảo hành
+  id: definitions-warranty-handling
+  title: Warranty handling
 
 pools:
-  - id: participant-trung-tam-dich-vu
-    name: Trung Tâm Dịch Vụ
-    process: process-xu-ly-bao-hanh
+  - id: participant-service-centre
+    name: Service Centre
+    process: process-warranty-handling
     lanes:
-      - { id: lane-cskh, name: Tiếp Nhận }
-      - { id: lane-ky-thuat, name: Kỹ Thuật Viên }
+      - { id: lane-front-desk, name: Front Desk }
+      - { id: lane-technicians, name: Technicians }
 
 nodes:
-  - { id: event-start-nhan-yeu-cau, name: Nhận yêu cầu bảo hành, kind: event, event: start, lane: lane-cskh }
-  - { id: task-user-chan-doan-loi, name: Chẩn đoán lỗi thiết bị, kind: task, task: user, lane: lane-ky-thuat }
-  - { id: gateway-exclusive-con-han, name: Còn hạn bảo hành?, kind: gateway, gateway: exclusive, lane: lane-cskh }
-  - { id: task-user-goi-lai-khach, name: Gọi lại khách, kind: task, task: user, lane: lane-cskh, markers: [loop] }
+  - { id: event-start-warranty-request, name: Warranty request received, kind: event, event: start, lane: lane-front-desk }
+  - { id: task-user-diagnose-the-fault, name: Diagnose the fault, kind: task, task: user, lane: lane-technicians }
+  - { id: gateway-exclusive-within-warranty, name: Still under warranty?, kind: gateway, gateway: exclusive, lane: lane-front-desk }
+  - { id: task-user-call-the-customer, name: Call the customer back, kind: task, task: user, lane: lane-front-desk, markers: [loop] }
 
 flows:
-  - { source: event-start-nhan-yeu-cau, target: gateway-exclusive-con-han }
-  - { source: gateway-exclusive-con-han, target: task-user-chan-doan-loi, name: Còn hạn }
+  - { source: event-start-warranty-request, target: gateway-exclusive-within-warranty }
+  - { source: gateway-exclusive-within-warranty, target: task-user-diagnose-the-fault, name: Under warranty }
 ```
 
 **Declaration order carries meaning.** Among the branches leaving a gateway, the one declared *first* keeps the main line through the layout, and is the default branch when the rules are repaired. The happy path only has to be stated once.

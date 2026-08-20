@@ -1,137 +1,138 @@
-# Quy trình dựng một sơ đồ BPMN
+# How a BPMN diagram gets built
 
-Tài liệu này mô tả **vòng làm việc của người dựng sơ đồ**, không phải nội bộ của công cụ. Đọc xong là biết chạy lệnh nào, ở bước nào, và sửa file nào.
+This document describes **the modeller's working loop**, not the tool's internals. After reading it you know which command to run, at which step, and which file to edit.
 
-Sơ đồ nguồn của quy trình này nằm ở [`bpmnworkflow.bpmn`](bpmnworkflow.bpmn), chính nó cũng được dựng bằng quy trình này. Chạy `bpmn-lint` lên nó sẽ ra chín lỗi: cả chín đều là *cùng một* hạn chế của bộ kiểm. nó chưa biết một `subProcess` là một phạm vi riêng, nên vừa coi subprocess là node cô lập, vừa coi start/end event bên trong là node của phạm vi ngoài. Xem "Cái gì chưa qua được vòng lặp" ở cuối trang.
+The source diagram for this process is [`bpmnworkflow.bpmn`](bpmnworkflow.bpmn), which was itself built by this process. Running `bpmn-lint` on it reports nine errors, and all nine are *the same* limitation of the checker: it does not yet know that a `subProcess` is a scope of its own, so it treats the subprocess as an isolated node and the start and end events inside it as nodes of the outer scope. See "What does not survive the loop yet" at the end.
 
-## Toàn cảnh
+## The whole picture
 
 ```
                         ┌────────────────────────────────────────────────┐
                         │                                                │
-  Tạo <ten>-brief.yaml ─┴─► gửi yaml ─► [bpmn-brief] ─► <ten>.bpmn    │
-   (một lần, nguyên bản)                                     │           │
-                                                             ▼          │
-                                                  Chỉnh tay trên Modeler |
-                                                             │           │
-                                                             ▼          │
-                                             [bpmn2yaml] ─> <ten>.yaml   |
-                                                             │           │
-                                                  Hài lòng? <x>─Không────┘
-                                                             │  (sửa <ten>.yaml)
-                                                             └─Có──► đưa vào báo cáo
+  Write <name>-brief.yaml ┴─► feed the yaml ─► [bpmn-brief] ─► <name>.bpmn │
+   (once, the original)                                     │             │
+                                                            ▼             │
+                                                 Adjust in Modeler        │
+                                                            │             │
+                                                            ▼             │
+                                            [bpmn2yaml] ─> <name>.yaml    │
+                                                            │             │
+                                                 Happy? <x>─No────────────┘
+                                                            │  (edit <name>.yaml)
+                                                            └─Yes──► into the report
 ```
 
 ![BPMN Workflow](./bpmnworkflow.png)
 
-Hai file, hai vai trò khác nhau, đây là điểm quan trọng nhất của tài liệu này:
+Two files with two different roles, which is the most important thing on this page:
 
-| File | Vai trò | Dùng mấy lần |
+| File | Role | How often it is used |
 | --- | --- | --- |
-| `<ten>-brief.yaml` | **Nguyên bản.** Bản mô tả đầu tiên, thường chỉ có happy path | **Một lần.** Viết xong, sinh ra `.bpmn` đầu tiên, rồi để đó |
-| `<ten>.yaml` | **Bản cải tiến liên tục.** Do `bpmn2yaml` sinh ra, người sửa tiếp | Nhiều lần, mỗi vòng lặp |
+| `<name>-brief.yaml` | **The original.** The first description, usually only the happy path | **Once.** Write it, generate the first `.bpmn`, then leave it alone |
+| `<name>.yaml` | **The continuously improved copy.** Produced by `bpmn2yaml`, edited from then on | Many times, once per pass |
 
-Nói cách khác: **brief là bệ phóng, không phải nguồn sự thật lâu dài.** Sau vòng đầu tiên, thứ bạn sửa là `<ten>.yaml`, nó đã có đủ toạ độ, đủ phần tử bạn thêm trong Modeler, và nó quay ngược lại được vào `bpmn-brief`.
+Put another way: **the brief is a launchpad, not a lasting source of truth.** After the first pass, the file you edit is `<name>.yaml`. It already carries the coordinates, it already carries everything added in the modeler, and it feeds straight back into `bpmn-brief`.
 
-## Vòng lặp
+## The loop
 
-### 1. Tạo `<ten>-brief.yaml` một lần duy nhất
+### 1. Write `<name>-brief.yaml`, once
 
-Không toạ độ, không `row`/`col`: chỉ nói có những bước gì và nối với nhau ra sao. Đủ happy path là được; nhánh rẽ và sự kiện chờ có thể bổ sung ở các vòng sau.
-
-```bash
-bpmn-brief content/processes/<ten>-brief.yaml -o content/processes/<ten>.bpmn
-```
-
-**Thứ tự khai báo có nghĩa.** Trong các nhánh rời một cổng, nhánh khai *trước* giữ dòng chảy chính khi bố cục, và là nhánh mặc định khi sửa luật.
-
-### 2. Gửi yaml để tạo bpmn
-
-Cùng một lệnh, cho cả hai loại đầu vào:
+No coordinates, no `row`/`col`: just what the steps are and how they connect. The happy path is enough; branches and waiting events can be added on later passes.
 
 ```bash
-bpmn-brief <ten>-brief.yaml -o <ten>.bpmn   # vòng đầu
-bpmn-brief <ten>.yaml       -o <ten>.bpmn   # các vòng sau
+bpmn-brief content/processes/<name>-brief.yaml -o content/processes/<name>.bpmn
 ```
 
-`bpmn-brief` in ra mọi thứ nó tự sửa (`[sửa] …`) và mọi thứ nó không dám sửa (`✗ …`). Xem [`rules.md`](rules.md) để biết ranh giới giữa hai nhóm đó.
+**Declaration order carries meaning.** Among the branches leaving a gateway, the one declared *first* keeps the main line through the layout and is the default branch when the rules are repaired.
 
-### 3. Chỉnh tay trên Camunda Modeler
+### 2. Feed the yaml, get the bpmn
 
-Bố cục tự động giải đúng phần *cấu trúc*, cái gì trước cái gì, nhánh nào tách ra đâu, nhưng không giải phần *thẩm mỹ*: nhãn cạnh chen nhau, một cung đi vòng hơi xa, hai sự kiện nên đảo chỗ. Đó là năm phút kéo thả, không đáng viết thêm vài trăm dòng thuật toán.
-
-Đây cũng là chỗ thêm những thứ brief chưa tả được: kho dữ liệu, ghi chú, màu phân tích.
-
-### 4. Gọi `bpmn-generator` tạo yaml
+One command, for both kinds of input:
 
 ```bash
-bpmn2yaml <ten>.bpmn -o <ten>.yaml --strict
+bpmn-brief <name>-brief.yaml -o <name>.bpmn   # the first pass
+bpmn-brief <name>.yaml       -o <name>.bpmn   # every pass after that
 ```
 
-`--strict` thoát với mã lỗi nếu file chứa một phần tử vẽ được mà bộ chuyển đổi chưa hiểu. **Đừng bỏ cờ đó**, nó là thứ duy nhất cho biết sơ đồ có mất phần tử hay không.
+`bpmn-brief` prints everything it repaired (`[sửa] …`) and everything it refused to repair (`✗ …`). [`rules.md`](rules.md) explains the boundary between the two.
 
-### 5. Hài lòng với file bpmn không?
+### 3. Adjust it in Camunda Modeler
 
-- **Có** $\rightarrow$ `<ten>.yaml` chính là thứ đưa vào báo cáo (typst-bpmn đọc nó).
-- **Không** $\rightarrow$ sửa `<ten>.yaml`, rồi quay lại bước 2.
+Automatic layout gets the *structure* right, what comes before what and where a branch splits, and it does not get the *aesthetics* right: labels crowding each other, an arc swinging too wide, two events that should swap places. That is five minutes of dragging, not a few hundred more lines of algorithm.
 
-Sửa `<ten>.yaml` chứ **không** quay lại sửa brief. Brief đã hoàn thành vai trò của nó ở vòng đầu; quay lại đó là vứt bỏ mọi thứ đã thêm trong Modeler.
+This is also where things the brief cannot describe get added: data stores, annotations, analytic colour.
 
-## Vòng lặp này giữ được gì
+### 4. Convert back to yaml
 
-Một vòng `<ten>.yaml` $\rightarrow$ `.bpmn` $\rightarrow$ `<ten>.yaml` giữ nguyên:
+```bash
+bpmn2yaml <name>.bpmn -o <name>.yaml --strict
+```
 
-- **mọi id**: node, sequence flow, message flow, data association;
-- **mọi phần tử**, kể cả kho dữ liệu và ghi chú (chúng được treo lại dưới phần tử chủ);
-- **nhánh mặc định** của mọi cổng rẽ điều kiện;
-- **behaviour marker** của activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`;
-- **toạ độ**: `bounds` của mọi shape, `waypoints` của mọi cạnh, `label` của node và cạnh, và màu hex `fill`/`stroke`;
+`--strict` exits with an error code if the file contains a drawable element the converter does not understand. **Do not drop that flag**: it is the only thing that tells you whether the diagram lost an element.
+
+### 5. Happy with the bpmn?
+
+- **Yes** $\rightarrow$ `<name>.yaml` is what goes into the report; typst-bpmn reads it.
+- **No** $\rightarrow$ edit `<name>.yaml` and go back to step 2.
+
+Edit `<name>.yaml`, and do **not** go back to the brief. The brief did its job on the first pass; returning to it throws away everything added in the modeler.
+
+## What the loop preserves
+
+One pass of `<name>.yaml` $\rightarrow$ `.bpmn` $\rightarrow$ `<name>.yaml` preserves:
+
+- **every id**: node, sequence flow, message flow, data association;
+- **every element**, including data stores and annotations, which are re-hung under their host;
+- **the default branch** of every conditional gateway;
+- **the behaviour markers** of an activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`;
+- **every coordinate**: `bounds` on every shape, `waypoints` on every edge, node and edge `label` boxes, and the `fill`/`stroke` hex;
 - **the reading direction**, `horizontal:` on each pool. Until v0.6.0 this was the one thing the `.yaml` stated and `bpmn-brief` ignored, so a vertical model came back horizontal and the author lost the single largest decision made about the page.
 
-Chạy vòng thứ hai trên cùng một file cho ra `.yaml` **giống hệt**, nếu không, đó là lỗi.
+A second pass over the same file produces an **identical** `.yaml`. If it does not, that is a bug.
 
 To lay a model out in the other direction, set `horizontal: false` on its pools, delete the `bounds` and `waypoints` you want recomputed, and generate again. What comes out is a vertical layout rather than a horizontal one turned on its side: the pitch along the flow is measured from the height of a task rather than its width, and the lanes are as thick as the shapes are wide. `bpmn-rotate` is still the tool for turning a diagram that is already arranged the way you want; this is the tool for generating one that way from the start.
 
-Toạ độ chỉ được **tính** khi file chưa có sẵn, tức là ở vòng đầu tiên từ một brief. Từ vòng hai trở đi, `.yaml` do `bpmn2yaml` sinh ra đã mang theo `bounds` và `waypoints`, và những gì nó mang theo thì đi thẳng vào file kết quả: cùng một luật với `row`/`col`, người viết luôn thắng máy. Muốn bỏ toạ độ và bố cục lại từ đầu thì xoá các khoá `bounds`/`waypoints` khỏi `.yaml`.
+Coordinates are **computed** only when the file does not already carry them, which is to say on the first pass from a brief. From the second pass on, the `.yaml` that `bpmn2yaml` produced carries `bounds` and `waypoints`, and whatever it carries goes straight into the result: the same rule as `row`/`col`, the author always beats the algorithm. To throw the coordinates away and lay the model out afresh, delete the `bounds` and `waypoints` keys from the `.yaml`.
 
-Ghim một nửa thì `bpmn-brief` in `[chú ý]`: phần được ghim nằm ở chỗ Modeler đặt, phần còn lại ở chỗ lưới tính, và hai hệ toạ độ đó không biết nhau nên hình có thể chồng lấn.
+Pin half of them and `bpmn-brief` prints `[chú ý]`: the pinned part sits where the modeler put it and the rest sits where the grid computed it, and those two coordinate systems know nothing about each other, so shapes can overlap.
 
-Thứ **không** giữ được, và cố ý không giữ:
-- **Id của `<bpmn:process>`.** Nó không xuất hiện trên sơ đồ nên `bpmn2yaml` không ghi lại; vòng sau sinh ra `Process_<id-participant>`. Không có gì tham chiếu tới nó.
+What is **not** preserved, deliberately:
 
-## Cái gì chưa qua được vòng lặp
+- **The id of `<bpmn:process>`.** It never appears on the diagram, so `bpmn2yaml` does not record it and the next pass generates `Process_<participant-id>`. Nothing references it.
 
-`bpmn-brief` dừng lại và báo rõ khi gặp:
+## What does not survive the loop yet
 
-| `kind` | Vì sao | Làm gì |
+`bpmn-brief` stops and says so when it meets:
+
+| `kind` | Why | What to do |
 | --- | --- | --- |
-| `subprocess` | Cần một mặt phẳng vẽ riêng, chưa có | Tách thành mô hình riêng, hoặc giữ `.bpmn` làm nguồn sự thật cho mô hình đó |
-| `group` | Khung trang trí, không có ngữ nghĩa dòng chảy | Bỏ khỏi `.yaml`, vẽ lại trong Modeler ở vòng cuối |
+| `subprocess` | It needs a drawing plane of its own, which does not exist yet | Split it into a model of its own, or keep the `.bpmn` as the source of truth for that model |
+| `group` | A decorative frame with no flow semantics | Drop it from the `.yaml` and redraw it in the modeler on the last pass |
 
 Two shapes that used to fail and now do not, worth knowing because they change what the output looks like. An annotation survives whether it hangs off a node or off a sequence flow; a flow-level one is written into the collaboration, which is where Camunda Modeler puts it. A model with no pool at all, a plain process with no collaboration, comes out as a bare `<bpmn:process>` with the diagram plane pointing at the process rather than at a collaboration, which is the shape it went in as.
 
-Marker `adhoc` cũng dừng lại, vì nó không phải một thuộc tính mà là một loại phần tử khác (`adHocSubProcess`), tức là cùng chỗ tắc với `subprocess`.
+The `adhoc` marker stops as well, because it is not an attribute but a different element type (`adHocSubProcess`), which puts it in the same place as `subprocess`.
 
-## Behaviour marker
+## Behaviour markers
 
-Ký hiệu BPMN vẽ dọc cạnh dưới một activity. Khai bằng `markers:` trên node, và chỉ trên activity: `loopCharacteristics` là thuộc tính của `tActivity`, nên sự kiện và cổng không có chỗ đặt.
+The BPMN glyphs drawn along the bottom edge of an activity. Declared with `markers:` on a node, and only on an activity: `loopCharacteristics` is an attribute of `tActivity`, so events and gateways have nowhere to put it.
 
 ```yaml
-  - { id: task-user-goi-lai-khach, name: Gọi lại khách, kind: task, task: user, markers: [loop] }
+  - { id: task-user-call-back, name: Call the customer back, kind: task, task: user, markers: [loop] }
 ```
 
-| Tên | Vẽ ra | Trong XML |
+| Name | Draws | In the XML |
 | --- | --- | --- |
-| `loop` | mũi tên vòng | `<bpmn:standardLoopCharacteristics />` |
-| `mi-parallel` (`parallel`) | ba vạch dọc | `<bpmn:multiInstanceLoopCharacteristics isSequential="false" />` |
-| `mi-sequential` (`sequential`) | ba vạch ngang | `<bpmn:multiInstanceLoopCharacteristics isSequential="true" />` |
-| `compensation` | mũi tên tua ngược | thuộc tính `isForCompensation="true"` |
+| `loop` | a circular arrow | `<bpmn:standardLoopCharacteristics />` |
+| `mi-parallel` (`parallel`) | three vertical bars | `<bpmn:multiInstanceLoopCharacteristics isSequential="false" />` |
+| `mi-sequential` (`sequential`) | three horizontal bars | `<bpmn:multiInstanceLoopCharacteristics isSequential="true" />` |
+| `compensation` | a rewind arrow | the `isForCompensation="true"` attribute |
 
-`bpmn-brief` dừng lại và báo khi tên marker không có trong bảng, khi marker đặt trên cổng hoặc sự kiện, và khi một activity khai hai kiểu lặp cùng lúc (`loop` cùng với `mi-*`), vì XML khi đó có hai phần tử con mà Modeler chỉ đọc cái đầu. `markers: []` thì hợp lệ ở mọi nơi, không có gì để từ chối.
+`bpmn-brief` stops and reports when a marker name is not in the table, when a marker is put on a gateway or an event, and when one activity declares two kinds of repetition at once (`loop` together with `mi-*`), because the XML then has two child elements and the modeler reads only the first. `markers: []` is valid everywhere; there is nothing in it to refuse.
 
-Một artifact không nối vào phần tử nào cũng bị bỏ, và được báo ra (`[chú ý] …`) không âm thầm biến mất.
+An artifact attached to nothing is dropped as well, and reported (`[chú ý] …`) rather than vanishing in silence.
 
-## Xem thêm
+## See also
 
-- [`naming.md`](naming.md), quy ước id, bảng từ khoá, và đổi tên hàng loạt
-- [`rules.md`](rules.md), luật well-formed: cái gì bắt, cái gì tự sửa, và vì sao
+- [`naming.md`](naming.md), the id convention, the keyword tables, and bulk renaming
+- [`rules.md`](rules.md), well-formedness: what is caught, what is repaired, and why

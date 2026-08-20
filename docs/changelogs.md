@@ -1,6 +1,20 @@
 # Changelogs
 
-Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
+Every tagged version gets an entry here. A completed item moves out of [`TODO.md`](TODO.md) and into the entry for the version that shipped it.
+
+## v0.6.3
+
+**`docs/` in English, and the sample data with it**
+
+`workflow.md`, `rules.md`, `naming.md` and the remaining Vietnamese entries of this changelog, translated whole files at a time. Example step names, labels and ids moved with the prose, so each document now reads in one language throughout.
+
+**This reverses one decision from v0.6.2.** That entry kept the README's sample brief in Vietnamese, on the grounds that `task-user-chan-doan-loi` is the name of a real step rather than English prose left untranslated. The counter-argument won: a document's examples teach a grammar, they are not a citation of the model files, and a reader meeting Vietnamese labels in an English README has to work out which parts are the convention and which are the domain. The README sample and every example in `naming.md` are now English.
+
+What survives that is the rule underneath, stated once instead of being implied by the examples: **a slug follows the language of the label it is made from.** The slug is the label, lower case, diacritics removed, hyphenated, so a Vietnamese-labelled model has Vietnamese slugs and an English-labelled one has English slugs. Nothing in the grammar is language-specific. `CONTRIBUTING.md` said the narrower version of this ("id slugs are Vietnamese") and now says the general one.
+
+What Vietnamese remains in `docs/` is quotation, and each piece of it is needed for the sentence around it to be true: the `[sửa]` and `[chú ý]` markers this tool actually prints, the `name="Phân loại\nhướng xử lý"` attribute from the newline bug in v0.5.0, and the ids quoted in the v0.6.2 entry below, which is a record of a decision this entry reverses. Changing the first two means changing strings in `src/`, which is a behaviour change rather than a documentation one, so the docs will follow the code there rather than lead it.
+
+That leaves the source comments and the user-facing strings in `src/` as the whole of the remaining backlog.
 
 ## v0.6.2
 
@@ -156,78 +170,78 @@ The **before committing** section also corrects the README, which still named on
 
 ## v0.5.1
 
-**Quy ước viết áp cho code base, và bốn tham chiếu chết**
+**The writing conventions applied to the code base, and four dead references**
 
-62 chỗ dùng em-dash trong docstring, chú thích và **chuỗi in ra cho người dùng**. Thay theo nghĩa chứ không máy móc thành dấu phẩy: nối hai mệnh đề độc lập thì thành chấm phẩy, gắn một nhãn hoặc mở một lời giải thích thì thành hai chấm.
+62 uses of the em-dash across docstrings, comments and **strings printed to the user**. Replaced by meaning rather than mechanically turned into commas: a semicolon where it joins two independent clauses, a colon where it attaches a label or opens an explanation.
 
-Bốn tham chiếu chết lộ ra trong lúc quét, và cả bốn đều nằm trong chữ người dùng đọc rồi gõ theo:
+Four dead references surfaced during the sweep, and all four were in text a user reads and then types out:
 
-- `bpmn-brief` in gợi ý "cắt bằng `bpmn-lane(M, ..)`, hoặc hẹp hơn nữa bằng `bpmn-part(M, ..)`". **Cả hai hàm đều không tồn tại** bên typst-bpmn. Đúng là `bpmn-figure(M, view: (lane: ..))` và `bpmn-span(M, from:, to:)`.
-- Cùng dòng đó trỏ tới `docs/bpmn-workflow.md`, cũng không tồn tại. Ba đường dẫn tài liệu cũ (`bpmn-rules.md`, `bpmn-naming.md`, `bpmn-workflow.md`) còn nằm rải trong `brief.py`, `ids.py`, `rules.py`, `test_ids.py` và `docs/naming.md`, từ hồi tách repo khỏi báo cáo. Nay trỏ đúng `docs/rules.md`, `docs/naming.md`, `docs/workflow.md`.
+- `bpmn-brief` printed the hint "slice with `bpmn-lane(M, ..)`, or narrower still with `bpmn-part(M, ..)`". **Neither function exists** in typst-bpmn. The right names are `bpmn-figure(M, view: (lane: ..))` and `bpmn-span(M, from:, to:)`.
+- The same line pointed at `docs/bpmn-workflow.md`, which does not exist either. Three old documentation paths (`bpmn-rules.md`, `bpmn-naming.md`, `bpmn-workflow.md`) were still scattered through `brief.py`, `ids.py`, `rules.py`, `test_ids.py` and `docs/naming.md`, left over from splitting this repository out of the report. They now point at `docs/rules.md`, `docs/naming.md` and `docs/workflow.md`.
 
-Bốn bộ test xanh, không đổi hành vi nào.
+All four test files green, with no behaviour changed.
 
 ## v0.5.0
 
-**Vòng lặp cải tiến giữ đúng thứ người vẽ đã chỉnh** `#bug` `#high`
+**The improvement loop keeps what the author adjusted** `#bug` `#high`
 
-`bpmn-brief` bỏ qua mọi toạ độ có sẵn trong `.yaml` và vẽ lại từ đầu. Với `bounds` thì thường không thấy, vì bố cục tất định nên chạy lại ra đúng chỗ cũ; với `waypoints` thì thấy ngay, vì đường đi của một cạnh là chỗ được chỉnh tay nhiều nhất trong Modeler. Một cung rời cổng từ *cạnh dưới* đi vòng xuống, sinh lại thành cung rời từ *cạnh phải* rồi bẻ khúc.
+`bpmn-brief` discarded every coordinate the `.yaml` already carried and drew from scratch. With `bounds` that usually went unnoticed, because the layout is deterministic and a rerun puts things back where they were; with `waypoints` it was obvious immediately, because an edge's path is the thing most often adjusted by hand in the modeler. An arc leaving a gateway from the *bottom* edge and swinging down came back leaving from the *right* edge with a dogleg in it.
 
-Đây không phải chuyện thẩm mỹ. Vòng lặp cải tiến của bộ công cụ này nằm ở chỗ người vẽ chỉnh tay trong Modeler rồi quay lại sửa `.yaml`, nên mỗi lần sinh lại xoá đúng phần vừa chỉnh, và công cụ chống lại chính quy trình nó phục vụ. Tài liệu có nói "toạ độ cố ý không giữ", nhưng câu đó chỉ đúng cho vòng đầu tiên, khi `.yaml` chưa có toạ độ nào.
+This is not a matter of taste. The improvement loop of this toolchain is exactly that the author adjusts the diagram in the modeler and then goes back to editing the `.yaml`, so every regeneration deleted precisely what had just been adjusted, and the tool worked against the process it exists to serve. The documentation did say "coordinates are deliberately not kept", but that sentence was only true for the first pass, when the `.yaml` has no coordinates at all.
 
-Nay mọi thứ người viết đưa vào đều thắng thuật toán, đúng cùng một luật với `row`/`col`. Cụ thể, những thứ trước đây bị vẽ lại và giờ đi thẳng qua:
+Now everything the author puts in beats the algorithm, under the same rule as `row`/`col`. Specifically, what used to be redrawn and now passes straight through:
 
-| | Trước | Nay |
+| | Before | Now |
 | --- | --- | --- |
-| `waypoints` của sequence flow | định tuyến lại | dùng nguyên |
-| `waypoints` của message flow | định tuyến lại | dùng nguyên |
-| `waypoints` của data association | nối thẳng chủ tới artifact | dùng nguyên |
-| `bounds` của node, pool, lane, black box, artifact | tính từ lưới | dùng nguyên |
-| `label` của node, cạnh, artifact | tính từ tâm | dùng nguyên |
-| `fill` / `stroke` hex | chỉ hiểu tên trong bảng màu | dùng nguyên, và thắng bảng màu |
-| `marker` của cổng loại trừ (`isMarkerVisible`) | mất | giữ |
+| `waypoints` on a sequence flow | re-routed | used as given |
+| `waypoints` on a message flow | re-routed | used as given |
+| `waypoints` on a data association | a straight line from host to artifact | used as given |
+| `bounds` on a node, pool, lane, black box or artifact | computed from the grid | used as given |
+| `label` on a node, edge or artifact | computed from the centre | used as given |
+| `fill` / `stroke` hex | only palette names were understood | used as given, and beats the palette |
+| `marker` on an exclusive gateway (`isMarkerVisible`) | lost | kept |
 
-Ghim một nửa thì phần được ghim nằm ở chỗ Modeler đặt, phần còn lại ở chỗ lưới tính, và hai hệ toạ độ đó không biết nhau. `bpmn-brief` nay in `[chú ý]` khi gặp trường hợp đó thay vì lặng lẽ cho ra một hình chồng lấn.
+Pin half of them and the pinned part sits where the modeler put it while the rest sits where the grid computed it, two coordinate systems that know nothing about each other. `bpmn-brief` now prints `[chú ý]` in that case rather than quietly producing a diagram with overlapping shapes.
 
-Ba lỗi nhỏ hơn lộ ra trong lúc đo:
+Three smaller bugs surfaced while measuring:
 
-**Ngắt dòng trong tên bị nuốt.** `name="Phân loại\nhướng xử lý"` ghi ký tự xuống dòng trần vào một thuộc tính XML. Hợp lệ về cú pháp, nhưng bộ phân tích *chuẩn hoá giá trị thuộc tính* và biến nó thành dấu cách, nên ngắt dòng người vẽ đặt biến mất sau mỗi vòng. Nay mã hoá thành `&#10;`.
+**A line break inside a name was swallowed.** `name="Phân loại\nhướng xử lý"` writes a bare newline into an XML attribute. Syntactically legal, but a parser *normalises attribute values* and turns it into a space, so the line break the author placed disappeared on every pass. It is now encoded as `&#10;`.
 
-**Toạ độ lẻ bị làm tròn.** Mọi toạ độ đều in `%.0f`, hợp lý khi tất cả đều do lưới sinh ra. Nhưng Modeler đặt nhãn ở nửa đơn vị (`x="903.5"`), nên khi `bounds` đi thẳng từ file vào thì làm tròn là sửa dữ liệu của người vẽ.
+**Half-unit coordinates were rounded.** Every coordinate was printed with `%.0f`, which is reasonable when the grid generates all of them. But the modeler places labels on half units (`x="903.5"`), so once `bounds` pass straight through from the file, rounding them is editing the author's data.
 
-**`exporterVersion` đứng yên ở "0.1.0"** qua ba lần phát hành, tức là nó nói sai chứ không phải nói thiếu. Số phiên bản chuyển vào `_version.py`, một chỗ duy nhất cho cả `__init__` lẫn `build`.
+**`exporterVersion` had stood at "0.1.0"** across three releases, which means it was stating something false rather than merely saying nothing. The version number moved into `_version.py`, one place for both `__init__` and `build`.
 
-Đo trên năm mô hình L3 của báo cáo: vòng `yaml → bpmn → yaml` nay **không mất một dòng nội dung nào**. Phần còn khác chỉ là thứ tự của data association trong danh sách `flows`, vì BPMN bắt chúng nằm bên trong activity chứ không nằm cùng chỗ với sequence flow. Mô hình thứ sáu (Kế Hoạch Khuyến Mãi) vẫn dừng ở `group`, đúng như bảng "chưa qua được vòng lặp" đã ghi.
+Measured on the five L3 models in the report: a `yaml → bpmn → yaml` pass now loses **not one line of content**. What still differs is the order of data associations within the `flows` list, because BPMN requires them to sit inside the activity rather than beside the sequence flows. The sixth model (the promotion plan) still stops at `group`, exactly as the "does not survive the loop" table says.
 
-Thêm `tests/test_roundtrip.py`, 8 khẳng định, gồm cả vòng thứ hai để chắc rằng bất biến không phải chuyện may.
+Added `tests/test_roundtrip.py`, 8 assertions, including a second pass to be sure the invariance is not luck.
 
 ## v0.4.0
 
-**`bpmn-rotate`, đổi phương của sơ đồ** `#feat` `#high`
+**`bpmn-rotate`, changing a diagram's direction** `#feat` `#high`
 
-Lệnh thứ năm: `bpmn-rotate quy-trinh.bpmn -o quy-trinh-doc.bpmn` đổi một sơ đồ ngang thành dọc, hoặc ngược lại. Không phải xoay hình. Xoay hình là việc của phía kết xuất, typst-bpmn quay cả bản vẽ để nó vừa trang giấy và chữ quay theo. Ở đây là đổi *cách đọc*: pool đang là dải ngang xếp chồng thì thành cột dọc đứng cạnh nhau, dòng chảy từ trái sang phải thành từ trên xuống dưới, còn chữ vẫn nằm ngang.
+A fifth command: `bpmn-rotate process.bpmn -o process-vertical.bpmn` turns a horizontal diagram into a vertical one, or back. This is not rotating a picture. Rotating a picture is the rendering side's job, where typst-bpmn turns the whole drawing to fit the page and the text turns with it. This changes how the diagram is *read*: pools that were bands stacked down the page become columns standing side by side, the flow runs top to bottom instead of left to right, and the text stays upright.
 
-Phép biến đổi là **chuyển vị**, `(x, y) → (y, x)`, không phải phép quay. Quay 90 độ thì hoặc dòng chảy chạy ngược, hoặc lane đầu tiên rơi xuống cuối. Chuyển vị giữ được cả hai thứ tự: điểm bắt đầu vẫn ở góc trên trái, lane khai trước vẫn đứng trước. Về hình học nó là phản chiếu chứ không phải phép quay, nhưng với bản vẽ toàn hình chữ nhật thẳng trục thì không ai nhận ra.
+The transform is a **transpose**, `(x, y) → (y, x)`, not a rotation. Rotating by 90 degrees either reverses the flow or drops the first lane to the end. A transpose keeps both orders: the start stays at the top left, and the lane declared first stays first. Geometrically it is a reflection rather than a rotation, but on a drawing made entirely of axis-aligned rectangles nobody can tell.
 
-Ba chỗ một phép nhân ma trận thuần tuý làm sai, và đó là phần lớn nội dung của bản này:
+Three places where a pure matrix multiplication gets it wrong, and they are most of what this release is:
 
-**Khung thì hoán kích thước, ký hiệu thì không.** Chuyển vị nguyên xi cả `width` lẫn `height` sẽ biến task 100×80 thành 80×100, cao hơn rộng, mà BPMN luôn vẽ task rộng hơn cao bất kể sơ đồ đi theo phương nào. Ngược lại một pool 3000×250 thì phải thành 250×3000, nếu không thì không còn là cột. Ranh giới đúng là vùng chứa (participant, lane, subprocess đã mở, group) thì hoán, ký hiệu (task, event, gateway, data object, ghi chú) thì giữ. Ký hiệu giữ kích thước thì phải chuyển vị **tâm** rồi đặt lại hộp quanh tâm, chứ không chuyển vị góc trên trái.
+**Containers swap their sides and glyphs do not.** Transposing `width` and `height` alike would turn a 100×80 task into 80×100, taller than it is wide, when BPMN always draws a task wider than tall whichever way the diagram reads. A 3000×250 pool, on the other hand, has to become 250×3000 or it is no longer a column. The right boundary is that containers (participant, lane, expanded subprocess, group) swap, and glyphs (task, event, gateway, data object, annotation) do not. A glyph that keeps its size has to have its **centre** transposed and its box rebuilt around that centre, rather than having its top-left corner transposed.
 
-**Cạnh phải neo lại.** Ký hiệu không đổi kích thước nên waypoint đã chuyển vị không còn nằm trên viền của chúng. Hai đầu mỗi cạnh được neo lại vào viền theo hướng của đoạn kề, kẹp toạ độ còn lại vào trong cạnh đó nên đoạn thẳng đứng vẫn thẳng đứng sau khi neo. Các điểm gãy ở giữa thì giữ nguyên: định tuyến lại cho bố cục dọc là việc của `build.py` ở chế độ dọc, đã ghi vào [`TODO.md`](TODO.md).
+**Edges have to be re-anchored.** Because glyphs do not change size, a transposed waypoint no longer lies on their border. Both ends of every edge are re-anchored to the border along the direction of the adjacent segment, with the other coordinate clamped inside that border, so a vertical segment is still vertical after anchoring. The bends in between are left alone: re-routing for a vertical layout is `build.py`'s job in vertical mode, and it was recorded in [`TODO.md`](TODO.md).
 
-**Nhãn chuyển vị theo ký hiệu.** Đã thử giữ nguyên độ lệch của nhãn so với tâm ký hiệu, để nhãn của event vẫn nằm dưới như trong bản ngang, rồi dựng thử: cạnh đi xuống cắt ngang qua chữ. Quy ước thật không phải "nhãn nằm dưới" mà là "nhãn nằm vuông góc với dòng chảy", nên nhãn chuyển vị theo và chuyển từ dưới sang bên cạnh.
+**Labels transpose with their glyph.** Keeping the label's offset from the glyph's centre was tried first, so that an event's label would stay underneath as it is in the horizontal version, and then rendered: the downward edge cut straight through the text. The real convention is not "the label goes underneath" but "the label goes perpendicular to the flow", so labels transpose too and move from below to beside.
 
-Gốc bản vẽ được giữ nguyên: chuyển vị đổi chỗ hai toạ độ của góc trên trái, không dịch lại thì sơ đồ nhảy sang một chỗ khác trên mặt phẳng mà không vì lý do gì.
+The drawing's origin is preserved: a transpose swaps the two coordinates of the top-left corner, and without translating back the diagram jumps somewhere else on the plane for no reason.
 
-Kết quả là *bố cục ngang đã chuyển vị*, không phải bố cục dọc sinh ra từ đầu. Nó dùng được ngay với mọi file `.bpmn`, kể cả file có subprocess hay group mà `bpmn-brief` chưa dựng lại được, và đó là lý do nó tồn tại như một bộ lọc riêng thay vì một cờ của `bpmn-brief`.
+What comes out is *a transposed horizontal layout*, not a vertical layout built from scratch. It works immediately on any `.bpmn`, including files with subprocesses or groups that `bpmn-brief` cannot yet rebuild, and that is why it exists as a separate filter rather than a flag on `bpmn-brief`.
 
-Thêm `tests/test_rotate.py`, 19 khẳng định. Cái đáng giá nhất là "xoay hai lần thì mọi hộp về đúng chỗ cũ": chuyển vị là phép đối hợp, nên bất kỳ chỗ nào tính sai một chiều đều lộ ra khi đi ngược lại. Đã kiểm trên mô hình Thẩm Định Thầu B2B, 39 shape và 42 cạnh, lệch 0.
+Added `tests/test_rotate.py`, 19 assertions. The most valuable one is "rotate twice and every box is back where it started": a transpose is an involution, so anywhere one direction is computed wrongly shows up on the way back. Checked on the B2B tender-assessment model, 39 shapes and 42 edges, with zero drift.
 
 ## v0.3.0
 
-**`markers` trong brief** `#feat` `#high`
+**`markers` in a brief** `#feat` `#high`
 
-`bpmn-brief` đọc được `markers:` trên activity và sinh ra phần tử BPMN tương ứng. Trước đó khoá này bị bỏ qua trong im lặng: `bpmn2yaml` ghi nó ra, nhưng đưa file `.yaml` đó ngược lại vào `bpmn-brief` thì marker biến mất, nên vòng lặp `yaml` → `bpmn` → `yaml` không bất biến với những mô hình có vòng lặp hoặc đa thể hiện.
+`bpmn-brief` reads `markers:` on an activity and generates the corresponding BPMN element. Until now the key was ignored in silence: `bpmn2yaml` wrote it out, but feeding that `.yaml` back into `bpmn-brief` lost the marker, so the `yaml` → `bpmn` → `yaml` loop was not invariant for any model with a loop or a multi-instance activity.
 
 ```yaml
   - id: task-empty-with-loop
@@ -238,30 +252,30 @@ Thêm `tests/test_rotate.py`, 19 khẳng định. Cái đáng giá nhất là "x
     markers: [loop]
 ```
 
-Từ vựng lấy đúng theo `convert.markers_of`, vì hai đầu phải khớp nhau: `loop`, `mi-parallel`, `mi-sequential`, `compensation`, `adhoc`. Kèm tên viết tắt cho những chữ người viết gõ ra trước tiên: `parallel` và `sequential` quy về `mi-parallel` và `mi-sequential`.
+The vocabulary is taken from `convert.markers_of`, because the two ends have to agree: `loop`, `mi-parallel`, `mi-sequential`, `compensation`, `adhoc`. Plus short forms for what an author types first: `parallel` and `sequential` resolve to `mi-parallel` and `mi-sequential`.
 
-Ba nhóm marker khác nhau ở chỗ chúng đi vào XML: `loop` và `mi-*` thành một phần tử con `loopCharacteristics` (đặt cuối thân activity theo XSD, sau `dataOutputAssociation`); `compensation` thành thuộc tính `isForCompensation` trên chính activity; `adhoc` thì phải đổi cả tên phần tử thành `adHocSubProcess`, nên hiện chưa hỗ trợ và báo rõ.
+The three groups of marker differ in how they reach the XML: `loop` and `mi-*` become a `loopCharacteristics` child element (placed last in the activity body per the XSD, after `dataOutputAssociation`); `compensation` becomes the `isForCompensation` attribute on the activity itself; and `adhoc` would require changing the element's name to `adHocSubProcess`, so it is not supported and says so.
 
-Phần lớn công sức nằm ở việc quyết định **cái gì phải gãy**. Một marker gõ sai mà bị lặng lẽ bỏ thì sơ đồ vẫn sinh ra, vẫn mở được, và thiếu đúng cái vòng lặp người viết muốn nói, nên bốn trường hợp dừng lại và báo lỗi: tên không có trong từ vựng; marker đặt trên cổng hoặc sự kiện (BPMN chỉ cho `tActivity` mang `loopCharacteristics`); hai kiểu lặp khai cùng lúc, vì XML sẽ có hai phần tử con mà Modeler chỉ đọc cái đầu; và `adhoc`. Riêng `markers: []` là hợp lệ ở mọi nơi, kể cả trên sự kiện, vì không có gì để từ chối.
+Most of the effort went into deciding **what has to break**. A mistyped marker that is quietly dropped still produces a diagram that still opens and is missing exactly the loop the author meant to state, so four cases stop with an error: a name not in the vocabulary; a marker on a gateway or an event (BPMN only lets `tActivity` carry `loopCharacteristics`); two kinds of repetition declared at once, because the XML would then have two child elements and the modeler reads only the first; and `adhoc`. `markers: []` alone is valid everywhere, including on an event, because there is nothing in it to refuse.
 
-Lỗi trên cổng chỉ thẳng chỗ đúng, `gateway: parallel|exclusive|inclusive|event`, vì đó gần như chắc chắn là điều người viết định nói khi gõ `markers: [parallel]` cho một cổng.
+The error on a gateway points straight at the right place, `gateway: parallel|exclusive|inclusive|event`, because that is almost certainly what the author meant when typing `markers: [parallel]` on a gateway.
 
-Thêm `tests/test_markers.py`, 17 khẳng định, quá nửa là ca lỗi.
+Added `tests/test_markers.py`, 17 assertions, more than half of them error cases.
 
 ## v0.2.0
 
-**Vòng lặp `yaml` → `bpmn` → `yaml` chạy được và bất biến**
+**The `yaml` → `bpmn` → `yaml` loop works and is invariant**
 
-`bpmn-brief` nhận luôn file `.yaml` do `bpmn2yaml` sinh ra làm đầu vào, nên brief chỉ dùng một lần ở vòng đầu; từ vòng hai trở đi thứ được sửa là `.yaml`. Một vòng giữ nguyên mọi id (node, sequence flow, message flow, data association), mọi phần tử kể cả kho dữ liệu và ghi chú, và nhánh mặc định của mọi cổng rẽ điều kiện. Toạ độ cố ý không giữ, vì mỗi lần sinh là bố cục lại, và đó là lý do bước chỉnh tay trên Modeler nằm *trong* vòng lặp chứ không nằm sau nó.
+`bpmn-brief` accepts the `.yaml` that `bpmn2yaml` produced as input, so the brief is used once on the first pass and from the second pass on the file being edited is the `.yaml`. One pass keeps every id (node, sequence flow, message flow, data association), every element including data stores and annotations, and the default branch of every conditional gateway. Coordinates were deliberately not kept, because every generation re-laid the diagram out, and that is why the manual step in the modeler sits *inside* the loop rather than after it.
 
-Tài liệu vòng làm việc: [`workflow.md`](workflow.md).
+The working loop is documented in [`workflow.md`](workflow.md).
 
 ## v0.1.0
 
-**Package Python đầu tiên**
+**The first Python package**
 
-Sáu script rời trong `report/tools/` của repo báo cáo chuyển thành một package cài được, với bốn console script: `bpmn-brief`, `bpmn-lint`, `bpmn-id`, `bpmn2yaml`. Lý do tách ra: khi công cụ nằm chung với nội dung thì không phân biệt được commit nào sửa báo cáo, commit nào sửa công cụ, mà hai thứ đó có nhịp thay đổi và người đọc hoàn toàn khác nhau.
+Six loose scripts in the report repository's `report/tools/` became one installable package with four console scripts: `bpmn-brief`, `bpmn-lint`, `bpmn-id`, `bpmn2yaml`. The reason for splitting them out: while the tools sat beside the content there was no telling which commit changed the report and which changed the tools, and those two things have entirely different rhythms and entirely different readers.
 
-`convert.py` (`bpmn2yaml`) nằm ở repo này dù nó phục vụ phía kết xuất, vì nó là công cụ Python thao tác trên file BPMN. Ranh giới giữa hai repo là chiều đi của dữ liệu, không phải ai dùng.
+`convert.py` (`bpmn2yaml`) lives in this repository even though it serves the rendering side, because it is a Python tool that manipulates BPMN files. The boundary between the two repositories is the direction the data flows, not who uses it.
 
-Kèm `docs/naming.md`, `docs/rules.md`, và `tests/test_ids.py` với 24 khẳng định.
+With `docs/naming.md`, `docs/rules.md`, and `tests/test_ids.py` with its 24 assertions.

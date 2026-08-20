@@ -1,112 +1,112 @@
-# Luật well-formed cho mô hình BPMN
+# Well-formedness rules for a BPMN model
 
-Một mô hình sai cấu trúc vẫn vẽ ra hình đẹp, nhưng **đọc sai**: token thoát ra khỏi nhánh, hoặc gộp ngầm ở chỗ người đọc không nhìn thấy. Sơ đồ trong báo cáo là để người khác đọc, nên phải đúng ngay cả khi không ai chạy nó.
+A structurally wrong model still draws a handsome picture, but it **reads wrongly**: the token escapes the branch, or merges implicitly somewhere the reader cannot see. A diagram in a report exists to be read by somebody else, so it has to be right even though nobody will ever execute it.
 
-Kiểm tra bất cứ lúc nào:
+Check at any point:
 
 ```bash
-bpmn-lint                                      # mọi model trong content/processes/
-bpmn-lint content/processes/<ten>-brief.yaml   # ngay từ bước 1, trước khi sinh
+bpmn-lint                                      # every model in content/processes/
+bpmn-lint content/processes/<name>-brief.yaml  # from step 1, before generating
 ```
 
-Cùng một bộ luật gác ở cả hai đầu quy trình: chạy được trên `-brief.yaml` (bước 1) lẫn `.bpmn` (sau bước 3). `--strict` thoát khác 0 khi có lỗi.
+One set of rules guards both ends of the process: it runs on a `-brief.yaml` (step 1) and on a `.bpmn` (after step 3). `--strict` exits non-zero when there are errors.
 
-## Bảng luật
+## The rules
 
-| Mã | Mức | Luật |
+| Code | Level | Rule |
 | --- | --- | --- |
-| `E-MERGE` | lỗi | Không gộp ngầm: nhiều luồng đi vào phải đi qua một cổng |
-| `E-DEFAULT` | lỗi | Cổng exclusive/inclusive rẽ nhiều nhánh phải có nhánh mặc định |
-| `E-SPLIT-JOIN` | lỗi | Mở bằng cổng nào thì đóng bằng cổng đó |
-| `E-MSG-GATEWAY` | lỗi | Message flow không được chạm vào cổng |
-| `E-START-IN` / `E-END-OUT` | lỗi | Sự kiện bắt đầu không có luồng vào; kết thúc không có luồng ra |
-| `E-DEAD-END` / `E-NO-IN` | lỗi | Node cụt hai đầu |
-| `E-UNREACHABLE` | lỗi | Node không tới được từ sự kiện bắt đầu |
-| `W-GW-NAME` | cảnh báo | Cổng rẽ nhánh nên có tên là một câu hỏi |
-| `W-BRANCH-LABEL` | cảnh báo | Nhánh của cổng rẽ nhánh nên có nhãn là câu trả lời |
+| `E-MERGE` | error | No implicit merge: several incoming flows have to pass through a gateway |
+| `E-DEFAULT` | error | An exclusive or inclusive gateway that splits needs a default branch |
+| `E-SPLIT-JOIN` | error | Close with the gateway type you opened with |
+| `E-MSG-GATEWAY` | error | A message flow must not touch a gateway |
+| `E-START-IN` / `E-END-OUT` | error | A start event has no incoming flow; an end event has no outgoing flow |
+| `E-DEAD-END` / `E-NO-IN` | error | A node with nothing on one end |
+| `E-UNREACHABLE` | error | A node no start event can reach |
+| `W-GW-NAME` | warning | A splitting gateway should be named as a question |
+| `W-BRANCH-LABEL` | warning | A branch of a splitting gateway should be labelled as an answer |
 
-## 1. Không gộp ngầm `E-MERGE`
+## 1. No implicit merge, `E-MERGE`
 
-**Không cho phép nhiều hơn một luồng đi thẳng vào một task/event/gateway thường.** Mọi chỗ hợp lưu phải đi qua một cổng.
+**More than one flow running straight into an ordinary task, event or gateway is not allowed.** Every confluence has to pass through a gateway.
 
 ```
-SAI                                ĐÚNG
+WRONG                              RIGHT
   A ─┐                               A ─┐
      ├──> Task                          ├─> (X) ──> Task
   B ─┘                               B ─┘
 ```
 
-BPMN cho phép viết kiểu sai, và nó có nghĩa: mỗi token tới là một lần kích hoạt task. Vấn đề là **người đọc không nhìn thấy điều đó**, hình vẽ trông y hệt một chỗ gộp. Bắt buộc vẽ cổng ra là bắt buộc nói rõ ý định: gộp loại trừ hay chờ đủ.
+BPMN permits the wrong form and gives it a meaning: each arriving token is one activation of the task. The problem is that **the reader cannot see that**; the picture looks exactly like a merge. Requiring the gateway is requiring the intention to be stated: an exclusive merge, or a wait for all.
 
-Áp dụng cho cả vòng rework: nhánh *"không đạt $\rightarrow$ làm lại"* quay về phải nhập vào một cổng trước bước bị làm lại, chứ không đâm thẳng vào task.
+This applies to rework loops too: a *"failed, do it again"* branch coming back has to enter a gateway before the step being redone, rather than running straight into the task.
 
-`bpmn-brief` **tự chèn** cổng này (xem phần Tự sửa bên dưới).
+`bpmn-brief` **inserts this gateway for you** (see "What the machine repairs" below).
 
-## 2. Nhánh mặc định `E-DEFAULT`
+## 2. The default branch, `E-DEFAULT`
 
-**Cổng exclusive và inclusive rẽ nhiều nhánh luôn phải có một nhánh mặc định**, và nhánh đó là **happy path**.
+**An exclusive or inclusive gateway that splits always needs a default branch**, and that branch is the **happy path**.
 
-Thiếu nó thì khi mọi điều kiện đều sai, token kẹt lại ở cổng, quy trình chết đứng mà nhìn hình không thấy gì bất thường. Có nó thì luôn còn một đường ra.
+Without one, when every condition is false the token is stuck at the gateway and the process dies where it stands, with nothing in the picture to show it. With one, there is always a way out.
 
-Trong `.bpmn` là thuộc tính `default="flow_..."` trên cổng; Camunda Modeler vẽ một gạch chéo nhỏ ở gốc nhánh đó.
+In a `.bpmn` it is the `default="flow_..."` attribute on the gateway; Camunda Modeler draws a small slash at the start of that branch.
 
-`bpmn-brief` **tự đặt** nhánh khai đầu tiên làm mặc định, cùng quy ước với bố cục (nhánh khai trước là dòng chảy chính), nên happy path chỉ cần nói một lần.
+`bpmn-brief` **sets** the first branch declared as the default, the same convention the layout uses (the branch declared first keeps the main line), so the happy path only has to be stated once.
 
-## 3. Mở bằng cổng nào, đóng bằng cổng đó `E-SPLIT-JOIN`
+## 3. Close with the gateway you opened with, `E-SPLIT-JOIN`
 
-| Mở bằng | Phải đóng bằng | Nếu sai |
+| Opened with | Must close with | If it does not |
 | --- | --- | --- |
-| Parallel (`+`) | Parallel | Đóng bằng exclusive: mỗi nhánh chạy tiếp một lần $\rightarrow$ phần sau chạy hai lần |
-| Exclusive (`×`) | Exclusive | Đóng bằng parallel: cổng chờ mãi nhánh không bao giờ tới $\rightarrow$ kẹt |
-| Event-based | Exclusive | (chấp nhận: cổng event chỉ có một nhánh thắng) |
+| Parallel (`+`) | Parallel | Closing with exclusive means each branch carries on once, so everything after runs twice |
+| Exclusive (`×`) | Exclusive | Closing with parallel means the gateway waits forever for a branch that never arrives |
+| Event-based | Exclusive | (accepted: an event gateway has exactly one winning branch) |
 | Inclusive (`○`) | Inclusive | |
 
-Bao đóng đối xứng là cách duy nhất để token không "thoát" đi lung tung.
+Symmetric enclosure is the only way to keep tokens from escaping.
 
-Luật này **không** áp cho nhánh quay lui: một vòng rework không có điểm đóng, và không cần có. Bộ kiểm tra nhận ra cạnh quay lui bằng DFS rồi bỏ qua.
+The rule does **not** apply to a loop-back branch: a rework loop has no closing point and does not need one. The checker detects back edges with a depth-first search and skips them.
 
-## 4. Message flow không chạm vào cổng `E-MSG-GATEWAY`
+## 4. A message flow must not touch a gateway, `E-MSG-GATEWAY`
 
-Cổng chỉ **định tuyến**; nó không nhận và không gửi được gì. Muốn nhận thông điệp từ pool khác thì phải có một **sự kiện bắt thông điệp** rồi mới tới cổng:
+A gateway only **routes**; it can neither receive nor send. To receive a message from another pool there has to be a **message catch event** first, and the gateway after it:
 
 ```
-SAI                                     ĐÚNG
-  [Pool NCC] ─ ─ ─> (×) Đồng ý?          [Pool NCC] ─ ─ ─> (✉) Nhận phản hồi ──> (×) Đồng ý?
+WRONG                                    RIGHT
+  [Supplier] ─ ─ ─> (×) Accepted?         [Supplier] ─ ─ ─> (✉) Reply received ──> (×) Accepted?
 ```
 
-Đây là lỗi **không được tự sửa**: sửa đúng phải chèn một sự kiện, mà sự kiện thì cần một cái tên, và chỉ người viết mới biết đặt tên gì. Bộ kiểm tra chỉ báo và gợi ý.
+This is the error that is **not** repaired automatically: repairing it means inserting an event, an event needs a name, and only the author knows what to call it. The checker reports it and suggests the shape of the fix.
 
-## 5. Đặt tên `W-GW-NAME`, `W-BRANCH-LABEL`
+## 5. Naming, `W-GW-NAME` and `W-BRANCH-LABEL`
 
-Cổng rẽ nhánh đặt tên là **câu hỏi** (`Còn hạn bảo hành?`), nhánh đặt tên là **câu trả lời** (`Còn hạn` / `Hết hạn`, không phải `Yes` / `No`). Cổng hợp lưu (join) không cần tên vì nó không hỏi gì.
+A splitting gateway is named as a **question** (`Still under warranty?`) and its branches as **answers** (`Under warranty` / `Expired`, not `Yes` / `No`). A merging gateway needs no name, because it asks nothing.
 
-## Tự sửa: cái gì máy làm, cái gì người làm
+## What the machine repairs, and what it leaves to you
 
-`bpmn-brief` chạy `tools/bpmnrules.normalize()` trước khi bố cục, và in ra từng thay đổi.
+`bpmn-brief` runs `rules.normalize()` before laying out, and prints every change it makes.
 
-Ranh giới rất rõ:
+The boundary is sharp:
 
-| Vi phạm | Máy sửa? | Vì sao |
+| Violation | Repaired? | Why |
 | --- | --- | --- |
-| `E-MERGE` | ✓ chèn cổng hợp lưu | Cổng hợp lưu **không có tên**, không cần hỏi ai |
-| `E-DEFAULT` | ✓ đặt nhánh đầu tiên | Thứ tự khai báo đã nói happy path là nhánh nào |
-| `E-MSG-GATEWAY` | ✗ | Phải chèn một sự kiện, mà sự kiện cần một cái tên |
-| `E-SPLIT-JOIN` | một phần | Loại cổng hợp lưu chèn vào được chọn khớp với cổng đã mở |
-| Còn lại | ✗ | Là lỗi mô hình hoá, không phải lỗi cơ học |
+| `E-MERGE` | Yes, a merge gateway is inserted | A merge gateway **has no name**, so nobody has to be asked |
+| `E-DEFAULT` | Yes, the first branch declared | Declaration order has already said which branch is the happy path |
+| `E-MSG-GATEWAY` | No | It means inserting an event, and an event needs a name |
+| `E-SPLIT-JOIN` | Partly | The inserted merge gateway's type is chosen to match the one that opened |
+| Everything else | No | These are modelling mistakes, not mechanical ones |
 
-Loại cổng hợp lưu được chọn bằng cách đi ngược từ mỗi luồng vào tới cổng rẽ gần nhất: mọi đường cùng chỉ về một cổng song song thì chèn cổng song song, còn lại chèn exclusive (đúng cho vòng rework và cho các nhánh loại trừ).
+The merge gateway's type is chosen by walking back from each incoming flow to the nearest splitting gateway: if every path points at the same parallel gateway, a parallel gateway is inserted; otherwise an exclusive one, which is right both for a rework loop and for exclusive branches.
 
-## Ở bước 3, refine trong Modeler
+## At step 3, refining in the modeler
 
-Camunda Modeler không ngăn được các lỗi này, nên sau khi chỉnh xong **chạy lại**:
+Camunda Modeler does not prevent any of these, so after adjusting a diagram, **run it again**:
 
 ```bash
-bpmn-lint content/processes/<ten>.bpmn
+bpmn-lint content/processes/<name>.bpmn
 ```
 
-Hai thao tác trong Modeler hay sinh lỗi mới:
+Two things done in the modeler keep producing new violations:
 
-- Nối thêm một mũi tên vào một task đã có mũi tên vào $\rightarrow$ `E-MERGE`.
-- Nối message flow từ pool ngoài thẳng vào một cổng $\rightarrow$ `E-MSG-GATEWAY`.
+- Drawing a second arrow into a task that already has one, giving `E-MERGE`.
+- Running a message flow from an outside pool straight into a gateway, giving `E-MSG-GATEWAY`.
 
-Xem quy trình vận hành ở repo báo cáo cho toàn bộ quy trình bốn bước.
+The report's own repository documents the full four-step working process.

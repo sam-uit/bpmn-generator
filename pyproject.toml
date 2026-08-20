@@ -1,6 +1,6 @@
 [project]
 name = "bpmn-generator"
-version = "0.6.2"
+version = "0.6.3"
 description = "Generate BPMN 2.0 diagrams from coordinate-free YAML briefs, with well-formedness rules and an id convention."
 readme = "README.md"
 requires-python = ">=3.11"
