@@ -1,60 +1,60 @@
 # bpmn-generator
 
-Viết sơ đồ BPMN 2.0 bằng một file YAML mô tả, thay vì kéo thả trong trình vẽ.
+Write a BPMN 2.0 diagram as one YAML description instead of dragging boxes around a modeler.
 
 ```bash
 uv run bpmn-brief quy-trinh-brief.yaml -o quy-trinh.bpmn
 ```
 
-Bạn khai **có những bước gì và nối với nhau ra sao**; chỗ đặt từng phần tử, bề rộng cột, đường đi của từng cạnh và toàn bộ khối BPMNDI thì máy tính. Kết quả mở được bằng Camunda Modeler như một file BPMN bình thường.
+You declare **what the steps are and how they connect**; where each element sits, how wide the columns are, how each edge runs, and the whole BPMNDI block are the computer's problem. The result opens in Camunda Modeler as an ordinary BPMN file.
 
-## Vì sao
+## Why
 
-Trình vẽ đồ hoạ tốt cho một sơ đồ, dở cho hai mươi sơ đồ phải nhất quán với nhau. Ba thứ nó không ép được:
+A graphical modeler is good for one diagram and bad for twenty that have to agree with each other. Three things it cannot enforce:
 
-- **Luật cấu trúc.** Modeler cho phép hai luồng chảy thẳng vào một task, hoặc một cổng loại trừ không có nhánh mặc định. Vẽ ra vẫn đẹp, nhưng đọc thì sai: token "thoát" ra khỏi nhánh, hoặc gộp ngầm ở chỗ người đọc không nhìn thấy. `bpmn-lint` bắt những thứ đó, và `bpmn-brief` tự sửa những cái sửa được mà không cần đặt tên.
-- **Quy ước đặt id.** `Task_1`, `Gateway_3` là mặc định của trình vẽ. Nhưng id là thứ   người khác phải gõ lại khi trích một lát cắt của sơ đồ vào báo cáo. `task-user-lap-ke-hoach` thì đọc là biết. `bpmn-id` sinh, kiểm, và đổi tên hàng loạt.
-- **Diff đọc được.** Hai file `.bpmn` khác nhau vài toạ độ thì `git diff` vô dụng. Một file brief thì diff đúng chỗ bạn đã sửa.
+- **Structural rules.** A modeler will happily let two flows run straight into one task, or an exclusive gateway have no default branch. It still draws nicely, but it reads wrongly: the token "escapes" the branch, or merges somewhere the reader cannot see. `bpmn-lint` catches those, and `bpmn-brief` repairs the ones that can be repaired without naming anything.
+- **An id convention.** `Task_1` and `Gateway_3` are what a modeler produces. But an id is what somebody else has to type back in when they cut a slice of the diagram into a report. `task-user-lap-ke-hoach` says what it is. `bpmn-id` generates, checks, and renames in bulk.
+- **A readable diff.** Two `.bpmn` files differing by a few coordinates make `git diff` useless. A brief file diffs exactly where you edited it.
 
-## Năm lệnh
+## Five commands
 
-| Lệnh | Việc |
+| Command | Job |
 | --- | --- |
-| `bpmn-brief <ten>-brief.yaml -o <ten>.bpmn` | Sinh sơ đồ: tự phân tầng, tự bố cục, tự sửa luật sửa được |
-| `bpmn-lint <file>` | Kiểm luật cấu trúc + quy ước id. Nhận cả `.bpmn` lẫn `.yaml` |
-| `bpmn-id <file> --rename --also <...>` | Đổi id hàng loạt theo quy ước, sửa luôn chỗ tham chiếu |
-| `bpmn2yaml <file>.bpmn -o <file>.yaml` | Chuyển sang YAML rút gọn cho [typst-bpmn](https://github.com/sam-uit/typst-bpmn) đọc |
-| `bpmn-rotate <file>.bpmn -o <file>-doc.bpmn` | Đổi phương sơ đồ: ngang thành dọc, hoặc ngược lại |
+| `bpmn-brief <name>-brief.yaml -o <name>.bpmn` | Generate: layer the graph, lay it out, repair the rules it can repair |
+| `bpmn-lint <file>` | Structural rules plus the id convention. Takes `.bpmn` or `.yaml` |
+| `bpmn-id <file> --rename --also <...>` | Rename ids in bulk to the convention, fixing every reference |
+| `bpmn2yaml <file>.bpmn -o <file>.yaml` | Convert to the compact YAML [typst-bpmn](https://github.com/sam-uit/typst-bpmn) reads |
+| `bpmn-rotate <file>.bpmn -o <file>-doc.bpmn` | Turn a finished diagram: horizontal to vertical, or back |
 
-## Ngang hay dọc
+## Horizontal or vertical
 
-`bpmn-rotate` đổi *cách đọc* sơ đồ, không phải xoay hình. Pool đang là dải ngang xếp chồng thì thành cột dọc đứng cạnh nhau, dòng chảy từ trái sang phải thành từ trên xuống dưới, chữ vẫn nằm ngang.
+`bpmn-rotate` changes how the diagram is *read*, it does not rotate a picture. Pools that were bands stacked down the page become columns standing side by side, the flow runs top to bottom instead of left to right, and the text stays upright.
 
-Phép biến đổi là chuyển vị `(x, y) → (y, x)`, không phải phép quay: quay 90 độ thì hoặc dòng chảy chạy ngược, hoặc lane đầu tiên rơi xuống cuối. Chỗ tinh tế là **khung thì hoán kích thước, ký hiệu thì không**: pool 3000×250 phải thành 250×3000, còn task thì vẫn 100×80, vì BPMN luôn vẽ task rộng hơn cao bất kể sơ đồ đi theo phương nào.
+The transform is a transpose, `(x, y) → (y, x)`, not a rotation: turning by 90 degrees either reverses the flow or drops the first lane to the end. The subtlety is that **containers swap their sides and glyphs do not**: a 3000×250 pool has to become 250×3000, while a task stays 100×80, because BPMN always draws a task wider than tall whichever way the diagram reads.
 
-Kết quả là bố cục ngang đã chuyển vị, không phải bố cục dọc sinh ra từ đầu, nên các điểm gãy giữa cạnh giữ nguyên chỗ cũ. Đổi lại, nó chạy được với mọi file `.bpmn` kể cả file có subprocess hay group.
+What comes out is a transposed horizontal layout rather than a vertical layout built from scratch, so every bend stays where it was. In exchange it works on any `.bpmn`, including files with subprocesses and groups.
 
 Since v0.6.0 there is a second way, and the two are for different situations. `bpmn-rotate` turns a finished diagram, coordinates and all, and never asks what the shapes mean. `bpmn-brief` now **lays out** in whichever direction the `.yaml` states: set `horizontal: false` on a pool, drop the `bounds` and `waypoints` you want recomputed, and generate again. That is a layout in its own right rather than a turned one, which shows in the numbers: the same brief comes out 532×380 read across and 380×492 read down, not 380×532, because the pitch along the flow is measured from the height of a task when the flow runs down and from its width when it runs across.
 
 Reach for `bpmn-rotate` to turn a diagram you have already arranged by hand, and for `horizontal:` to generate one in the direction you want from the start.
 
-## Vòng làm việc
+## The working loop
 
-Brief chỉ dùng **một lần**. Sau vòng đầu, thứ bạn sửa là file `.yaml` do `bpmn2yaml` sinh ra, nó quay ngược lại được vào `bpmn-brief`:
+A brief is written **once**. After the first pass, the file you edit is the `.yaml` that `bpmn2yaml` produced, and it feeds straight back into `bpmn-brief`:
 
 ```
-<ten>-brief.yaml ──► [bpmn-brief] ──► <ten>.bpmn ──► Camunda Modeler
-   (nguyên bản,                                             │
-    một lần)                                          [bpmn2yaml]
-                                                            │
-                        ┌── chưa hài lòng: sửa <ten>.yaml ──┤
-                        │                                   │
-                        └──────► [bpmn-brief] ◄───────────┘
+<name>-brief.yaml ──► [bpmn-brief] ──► <name>.bpmn ──► Camunda Modeler
+   (the original,                                            │
+    written once)                                      [bpmn2yaml]
+                                                             │
+                         ┌── not happy: edit <name>.yaml ────┤
+                         │                                   │
+                         └──────► [bpmn-brief] ◄─────────────┘
 ```
 
-Một vòng giữ nguyên **mọi id** (node, sequence flow, message flow, data association), **mọi phần tử** kể cả kho dữ liệu và ghi chú, **nhánh mặc định** của mọi cổng, và **mọi toạ độ bạn đã chỉnh tay trong Modeler**: `bounds`, `waypoints`, vị trí nhãn, màu. Cái gì `.yaml` nói tường minh thì thắng thuật toán, cùng một luật với `row`/`col`. Toàn bộ: [`docs/workflow.md`](docs/workflow.md).
+One pass preserves **every id** (node, sequence flow, message flow, data association), **every element** including data stores and annotations, the **default branch** of every gateway, **every coordinate you adjusted by hand in the modeler** (`bounds`, `waypoints`, label positions, colours), and the **reading direction** of each pool. Whatever the `.yaml` states explicitly beats the algorithm, the same rule as `row`/`col`. In full: [`docs/workflow.md`](docs/workflow.md).
 
-Dùng như thư viện:
+As a library:
 
 ```python
 from bpmn_generator import brief, ids, rules
@@ -64,9 +64,9 @@ for f in rules.check(g):
     print(f.level, f.code, f.node, f.message)
 ```
 
-## Brief trông thế nào
+## What a brief looks like
 
-Không toạ độ, không `row`/`col`, chỉ nói cái gì nối với cái gì:
+No coordinates, no `row`/`col`, just what connects to what:
 
 ```yaml
 meta:
@@ -92,49 +92,51 @@ flows:
   - { source: gateway-exclusive-con-han, target: task-user-chan-doan-loi, name: Còn hạn }
 ```
 
-**Thứ tự khai báo có nghĩa.** Trong các nhánh rời một cổng, nhánh khai *trước* giữ dòng chảy chính khi bố cục, và là nhánh mặc định khi sửa luật. Happy path chỉ cần nói một lần.
+**Declaration order carries meaning.** Among the branches leaving a gateway, the one declared *first* keeps the main line through the layout, and is the default branch when the rules are repaired. The happy path only has to be stated once.
 
-Khai `row`/`col` cho node nào thì node đó giữ nguyên, **người viết luôn thắng máy**.
+Declare `row`/`col` on a node and that node keeps them: **the author always beats the algorithm**.
 
-`markers:` là ký hiệu BPMN vẽ dọc cạnh dưới một activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`. Bảng đầy đủ ở [`docs/workflow.md`](docs/workflow.md).
+`markers:` are the BPMN glyphs drawn along the bottom edge of an activity: `loop`, `mi-parallel`, `mi-sequential`, `compensation`. Full table in [`docs/workflow.md`](docs/workflow.md).
 
-## Hai chỗ máy dừng lại
+## The two places the machine stops
 
-Ranh giới: *máy chỉ sửa những gì không cần đặt tên; cái gì cần đặt tên thì dừng lại và báo.* Chèn cổng hợp lưu thì máy làm, cổng hợp lưu không có nhãn nên không phải hỏi ai. Nhưng message flow chạm vào cổng thì **không** tự sửa: sửa đúng phải chèn một sự kiện bắt thông điệp, mà sự kiện thì cần một cái tên, và chỉ người viết mới biết đặt gì.
+The boundary: *the machine repairs what needs no naming; anything that needs a name stops and reports.* Inserting a merge gateway is the machine's job, because a merge gateway has no label and so nobody has to be asked. A message flow touching a gateway is **not** repaired: fixing it properly means inserting a message catch event, an event needs a name, and only the author knows what to call it.
 
-Cùng tinh thần, `bpmn-id` không tự rút gọn một nhãn mười âm tiết thành ba: chọn ba âm tiết nào *chính là đặt tên*. Nó báo `ID-LONG` và chờ bạn khai `slug:`.
+For the same reason `bpmn-id` will not shorten a ten-syllable label to three: choosing which three *is naming*. It reports `ID-LONG` and waits for you to declare a `slug:`.
 
-## Tài liệu
+## Documentation
 
-- [`docs/workflow.md`](docs/workflow.md), quy trình: brief một lần, `.yaml` nhiều lần, cái gì giữ được qua mỗi vòng và cái gì không
-- [`docs/naming.md`](docs/naming.md), quy ước id: khuôn, bảng từ khoá và viết tắt đầy đủ, và quy trình đổi tên hàng loạt
-- [`docs/rules.md`](docs/rules.md), luật well-formed: cái gì bắt, cái gì tự sửa, và vì sao
-- [`CONTRIBUTING.md`](CONTRIBUTING.md), quy ước của repo: ngôn ngữ, đặt tên, changelog, phụ thuộc, và việc phải chạy trước khi commit
+- [`docs/workflow.md`](docs/workflow.md), the process: brief once, `.yaml` many times, what survives each pass and what does not
+- [`docs/naming.md`](docs/naming.md), the id convention: the shape, the full keyword and abbreviation tables, and the bulk rename procedure
+- [`docs/rules.md`](docs/rules.md), well-formedness: what is caught, what is repaired, and why
+- [`CONTRIBUTING.md`](CONTRIBUTING.md), the repository's conventions: language, naming, changelog, dependencies, and what to run before committing
 
-## Cài đặt và phát triển
+## Install and develop
 
 ```bash
-uv sync                                          # môi trường phát triển
-uv run bpmn-lint <file>                          # chạy thẳng từ repo
-for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 125 khẳng định
+uv sync                                                     # a development environment
+uv run bpmn-lint <file>                                     # run straight from the repo
+for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 125 assertions
 ```
 
-Dùng từ một dự án khác, khai path dependency, để sửa thư viện là dự án thấy ngay:
+The same tests run in CI on every push and pull request, on Python 3.11 and 3.12; see [`.github/workflows/check.yml`](.github/workflows/check.yml).
+
+To use it from another project, declare a path dependency so that editing the library is visible immediately:
 
 ```toml
 [tool.uv.sources]
 bpmn-generator = { path = "../bpmn-generator", editable = true }
 ```
 
-Đường dẫn là tương đối *so với `pyproject.toml` của dự án kia*, không phải so với thư mục bạn đang đứng. Repo nằm sâu một tầng thì phải là `../../bpmn-generator`.
+The path is relative *to the other project's `pyproject.toml`*, not to the directory you are standing in. A repository one level deeper needs `../../bpmn-generator`.
 
-## Liên quan
+## Related
 
-[typst-bpmn](https://github.com/sam-uit/typst-bpmn) kết xuất những file này thành hình trong tài liệu Typst. Ranh giới giữa hai repo là **chiều đi của dữ liệu**:
+[typst-bpmn](https://github.com/sam-uit/typst-bpmn) renders these files as figures in a Typst document. The boundary between the two repositories is **the direction the data flows**:
 
 ```
-brief.yaml ──► .bpmn         bpmn-generator   (soạn thảo)
-.bpmn ──► .yaml ──► figure    typst-bpmn      (kết xuất)
+brief.yaml ──► .bpmn         bpmn-generator   (authoring)
+.bpmn ──► .yaml ──► figure    typst-bpmn      (rendering)
 ```
 
-`bpmn2yaml` nằm ở đây dù nó phục vụ phía kết xuất, vì nó là công cụ Python thao tác trên file BPMN, gom về một chỗ thì chỉ có một nơi để sửa khi lược đồ đổi.
+`bpmn2yaml` lives here even though it serves the rendering side, because it is a Python tool that manipulates BPMN files, and keeping them together means there is one place to fix when the schema changes.

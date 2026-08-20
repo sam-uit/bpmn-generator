@@ -2,6 +2,18 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.6.2
+
+**README in English**
+
+The first file anybody reads was the last one still in Vietnamese. Translated whole rather than in pieces, which is the unit the language rule asks for: a half-translated file costs a reader more than a consistently Vietnamese one, and a README is where a stranger decides whether to keep reading.
+
+Nothing was dropped and nothing was smoothed over in the move. Every backticked identifier, command, key and file name is character-for-character what it was, checked by comparing the two sets, so the document still says exactly what the code is called. The sample data stays Vietnamese, because `task-user-chan-doan-loi` and `Chẩn đoán lỗi thiết bị` are the names of real steps in the report this was built for, not English prose left untranslated.
+
+Two things were brought up to date while passing through. The list of what one pass preserves now includes the reading direction, which v0.6.0 added and the README had not caught up with. The install section now says the tests also run in CI, which v0.6.1 added.
+
+That leaves `docs/` as the remaining Vietnamese, and it is a larger and more careful job: `workflow.md`, `naming.md` and `rules.md` carry the reference tables, so a translation pass there has to be checked against the code rather than read for sense.
+
 ## v0.6.1
 
 **A licence, a check gate, and an ignore file that is about this repository**
