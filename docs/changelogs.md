@@ -2,6 +2,28 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.3
+
+**Message flow routing: three shapes instead of one, and the `KeyError` that hid behind explicit waypoints**
+
+`message_route` assumed every message flow had a collapsed participant at one end. It picked the endpoint that was not in `pool_bounds`, called it the node, and looked the *other* one up as a pool. A message flow joining two nodes therefore looked up a node id in `pool_bounds` and died with a bare `KeyError: 'Event_19kg7ym'`, a message that names the victim and says nothing about the cause.
+
+How this survived so long is the interesting part. The first line of the function returns the author's own `waypoints` untouched, and since v0.5.0 every `.yaml` that came back from a modeler carries waypoints for every edge. The crash was therefore invisible on the improvement loop and only reachable from a hand-written brief, which is exactly the path a new user takes first. Strip the message waypoints from this repository's own sample, `samples/b04-btvn01.bpmn` converted and fed back, and the old code dies on it.
+
+The routing is now three named methods, because there are three geometries and one of them cannot stand in for the others:
+
+- `message_route_node_to_band`, unchanged behaviour, kept byte-identical output. The band spans the whole width so the flow drops at the node's centre x and the band contributes only a y.
+- `message_route_node_to_node`, new. It picks the axis from the gap that actually exists between the two boxes rather than from the `isHorizontal` flag, which matters because that flag is still hard-coded and because a hand-placed diagram can disagree with it. Pools side by side leave a horizontal gap, pools stacked leave a vertical one, and the wider gap is the direction the message has to cross. With centres aligned it is one straight segment; otherwise it turns twice in the middle of the gap, the shape a modeler draws by hand.
+- `message_route_band_to_band`, new. Two collapsed participants exchanging a message directly, one vertical segment at the centre of the span the two bands share.
+
+Checked against the modeler rather than against itself: on `tests/fixtures/vertical-pools.bpmn` with its message waypoints removed, `MF_request` comes back as `340,300 -> 540,300`, which is what Camunda Modeler drew before the waypoints were stripped.
+
+An id that is neither a node nor a pool now raises a message that names the id and says what to do about it, instead of a `KeyError`. That is also the first user-facing string written under the new English-only rule.
+
+**`tests/test_message_routes.py`**, 20 assertions covering all three shapes, both directions, `offset` and `stub`, and the unknown-id message. It builds a `Model` without going through `layout()` and hands it only the two dictionaries the routers read, so each case reads as coordinates in and waypoints out.
+
+**Found while fixing this, filed rather than fixed**: a real pool that declares no lane is read as a black box, because `bpmn2yaml` writes neither `blackbox:` nor `process:` and `brief.py` falls back to "no lanes means collapsed". It loses the process and moves the pool's nodes into another pool's first lane. That is a three-file change across `convert.py`, `brief.py` and `build.py`, and mixing it into a routing fix would make both unreviewable, so it is now the open `#bug #med` in [`TODO.md`](TODO.md).
+
 ## v0.5.2
 
 **CONTRIBUTING.md, and English as a rule**

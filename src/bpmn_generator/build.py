@@ -69,6 +69,7 @@ LANE_LEFT_PAD = 40
 LANE_RIGHT_PAD = 40
 BLACKBOX_H = 60
 POOL_X = 160
+MESSAGE_STUB = 22   # stub a message flow runs before it turns into the free corridor
 
 PALETTE = {
     "blue": ("#bbdefb", "#0d4372"),
@@ -303,24 +304,64 @@ class Model:
         return [bottom(s), top(t)] if t["cy"] > s["cy"] else [top(s), bottom(t)]
 
     def message_route(self, m: dict) -> list[tuple[float, float]]:
-        """Nối một node với pool black box. `offset` đẩy đoạn dọc sang khoảng
-        trống giữa hai cột để không cắt ngang shape của lane ở giữa."""
+        """Route a message flow the author gave no explicit waypoints for.
+
+        Three shapes of message flow exist and each needs its own geometry, so this
+        method only picks between them:
+
+        - **node to black box band**, the common case in a sliced model, where one end
+          is a collapsed participant drawn as a full-width band;
+        - **node to node**, where both ends are real activities or events sitting in two
+          different real pools;
+        - **band to band**, two collapsed participants exchanging a message directly.
+
+        Before v0.5.3 only the first was handled: the endpoint that was not a pool was
+        assumed to be a node and the other was looked up in `pool_bounds`. A message flow
+        between two real pools therefore looked up a *node* id in `pool_bounds` and died
+        with a bare `KeyError`, which said nothing about what was wrong.
+        """
         given = m.get("waypoints")
         if given:
             return [(float(x), float(y)) for x, y in given]
-        pb = self.pool_bounds
-        node_id = m["dst"] if m["src"] in pb else m["src"]
-        pool_id = m["src"] if m["src"] in pb else m["dst"]
-        n, p = self.nodes[node_id], pb[pool_id]
+        pool_bounds = self.pool_bounds
+        src_is_band = m["src"] in pool_bounds
+        dst_is_band = m["dst"] in pool_bounds
+        for end in ("src", "dst"):
+            if m[end] not in pool_bounds and m[end] not in self.nodes:
+                raise SystemExit(
+                    f"[error] message flow refers to `{m[end]}`, which is neither a"
+                    " node nor a pool in this model.\n"
+                    "        A message flow has to join two elements that exist; check the"
+                    " id for a typo, or give `waypoints:` if you want to route it yourself."
+                )
+        if src_is_band != dst_is_band:
+            return self.message_route_node_to_band(m, pool_bounds)
+        if not src_is_band:
+            return self.message_route_node_to_node(m)
+        return self.message_route_band_to_band(m, pool_bounds)
+
+    def message_route_node_to_band(
+        self, m: dict, pool_bounds: dict
+    ) -> list[tuple[float, float]]:
+        """Join a node to a collapsed participant band above or below it.
+
+        The band spans the full width of the diagram, so the flow drops straight out of
+        the node at the node's own centre x; the band contributes only the y of its near
+        edge. `offset` pushes the vertical segment sideways into the empty corridor
+        between two columns so it does not cut across the shapes of an intervening lane.
+        """
+        node_id = m["dst"] if m["src"] in pool_bounds else m["src"]
+        pool_id = m["src"] if m["src"] in pool_bounds else m["dst"]
+        n, p = self.nodes[node_id], pool_bounds[pool_id]
         off = m.get("offset", 0)
-        stub = m.get("stub", 22)
-        below = p["y"] > n["y"]                      # pool nằm phía dưới node
-        y_node = n["y"] + n["h"] if below else n["y"]
-        y_pool = p["y"] if below else p["y"] + p["h"]
+        stub = m.get("stub", MESSAGE_STUB)
+        band_is_below = p["y"] > n["y"]
+        y_node = n["y"] + n["h"] if band_is_below else n["y"]
+        y_pool = p["y"] if band_is_below else p["y"] + p["h"]
         if off == 0:
             pts = [(n["cx"], y_node), (n["cx"], y_pool)]
         else:
-            y_mid = y_node + stub if below else y_node - stub
+            y_mid = y_node + stub if band_is_below else y_node - stub
             pts = [
                 (n["cx"], y_node),
                 (n["cx"], y_mid),
@@ -328,6 +369,60 @@ class Model:
                 (n["cx"] + off, y_pool),
             ]
         return pts if m["src"] == node_id else list(reversed(pts))
+
+    def message_route_node_to_node(self, m: dict) -> list[tuple[float, float]]:
+        """Join two nodes sitting in two different real pools.
+
+        The axis is chosen from the gap that actually exists between the two boxes rather
+        than from the pool orientation flag, because that keeps working for a diagram the
+        author laid out by hand: pools stacked as horizontal bands leave a vertical gap,
+        pools standing side by side leave a horizontal one, and whichever gap is wider is
+        the direction the message has to cross.
+
+        The flow leaves the facing edge of each box at that box's own centre, and when the
+        two centres do not line up it turns twice in the middle of the gap, the shape a
+        modeler draws by hand. `offset` shifts that middle segment along the crossing axis
+        when two message flows would otherwise land on top of each other.
+        """
+        s, t = self.nodes[m["src"]], self.nodes[m["dst"]]
+        off = m.get("offset", 0)
+        gap_x = max(t["x"] - (s["x"] + s["w"]), s["x"] - (t["x"] + t["w"]))
+        gap_y = max(t["y"] - (s["y"] + s["h"]), s["y"] - (t["y"] + t["h"]))
+        if gap_x > gap_y:
+            rightward = t["cx"] > s["cx"]
+            x0 = s["x"] + s["w"] if rightward else s["x"]
+            x1 = t["x"] if rightward else t["x"] + t["w"]
+            if s["cy"] == t["cy"]:
+                return [(x0, s["cy"]), (x1, t["cy"])]
+            x_mid = (x0 + x1) / 2 + off
+            return [(x0, s["cy"]), (x_mid, s["cy"]), (x_mid, t["cy"]), (x1, t["cy"])]
+        downward = t["cy"] > s["cy"]
+        y0 = s["y"] + s["h"] if downward else s["y"]
+        y1 = t["y"] if downward else t["y"] + t["h"]
+        if s["cx"] == t["cx"]:
+            return [(s["cx"], y0), (t["cx"], y1)]
+        y_mid = (y0 + y1) / 2 + off
+        return [(s["cx"], y0), (s["cx"], y_mid), (t["cx"], y_mid), (t["cx"], y1)]
+
+    def message_route_band_to_band(
+        self, m: dict, pool_bounds: dict
+    ) -> list[tuple[float, float]]:
+        """Join two collapsed participant bands directly to each other.
+
+        Two bands are stacked, so the flow is a single vertical segment between their
+        facing edges. It is placed at the centre of the horizontal span the two bands
+        share, which for the usual full-width bands is the middle of the diagram, and
+        falls back to the midpoint of the two centres when they do not overlap at all.
+        """
+        a, b = pool_bounds[m["src"]], pool_bounds[m["dst"]]
+        lo = max(a["x"], b["x"])
+        hi = min(a["x"] + a["w"], b["x"] + b["w"])
+        x = (lo + hi) / 2 if hi > lo else (a["x"] + a["w"] / 2 + b["x"] + b["w"] / 2) / 2
+        x += m.get("offset", 0)
+        b_is_below = b["y"] > a["y"]
+        y0 = a["y"] + a["h"] if b_is_below else a["y"]
+        y1 = b["y"] if b_is_below else b["y"] + b["h"]
+        return [(x, y0), (x, y1)]
 
     # -- xuất XML -------------------------------------------------------------
     def xml(self) -> str:
