@@ -20,7 +20,7 @@ Trước khi bố cục, brief được `tools/rules.normalize()` sửa những 
 mà máy sửa được mà không cần đặt tên: chèn cổng hợp lưu, đặt nhánh mặc định. Mọi thay đổi
 đều được in ra. Tắt bằng `--no-fix`. Xem `docs/bpmn-rules.md`.
 
-Toạ độ tuyệt đối, bề rộng cột, định tuyến cạnh và BPMNDI do `build.py` lo - script
+Toạ độ tuyệt đối, bề rộng cột, định tuyến cạnh và BPMNDI do `build.py` lo — script
 này chỉ trả lời câu hỏi "cái gì nằm ở ô lưới nào".
 """
 
@@ -175,7 +175,7 @@ def element_of(n: dict) -> str:
     hint = {
         "subprocess": "gỡ subprocess ra thành một mô hình riêng, hoặc giữ file .bpmn "
                       "làm nguồn sự thật cho mô hình này",
-        "group": "bỏ group khỏi .yaml - group chỉ là khung trang trí, vẽ lại trong Modeler",
+        "group": "bỏ group khỏi .yaml — group chỉ là khung trang trí, vẽ lại trong Modeler",
     }.get(kind)
     tail = f"\n  {hint}" if hint else ""
     raise SystemExit(f"bpmn-brief: chưa hỗ trợ kind '{kind}' (node {n.get('id')}){tail}")
@@ -248,7 +248,7 @@ def assign_rows(nodes: list[dict], edges: list[tuple[str, str]], back: set[int],
                 col: dict[str, int]) -> dict[str, int]:
     """Dòng = kế thừa bước trước; nhánh thứ hai trở đi tụt xuống; đụng thì đẩy tiếp.
 
-    Thứ tự khai báo trong YAML quyết định nhánh nào giữ được dòng chính - đó là chỗ
+    Thứ tự khai báo trong YAML quyết định nhánh nào giữ được dòng chính — đó là chỗ
     người viết nói "nhánh này mới là dòng chảy chính", và máy phải nghe theo.
     """
     by_id = {n["id"]: n for n in nodes}
@@ -307,23 +307,32 @@ def to_spec(brief: dict, source: str) -> dict:
     lane_of_pool = {}
     for p in pools_in:
         pid = p["id"]
-        # Một participant không có lane và không chứa node nào là black box - dù file
+        # Một participant không có lane và không chứa node nào là black box — dù file
         # nguồn không nói thẳng. Đây là chỗ `.yaml` chuyển đổi ngược quay lại được:
         # `bpmn2yaml` không ghi `blackbox`, nó chỉ đơn giản không ghi `lanes`.
         if p.get("blackbox") or not p.get("lanes"):
-            pools.append(dict(id=pid, name=p.get("name", pid), blackbox=True))
+            bb = dict(id=pid, name=p.get("name", pid), blackbox=True)
+            if p.get("bounds"):
+                bb["bounds"] = p["bounds"]
+            pools.append(bb)
             continue
         lanes = []
         for l in p.get("lanes", []):
             l = dict(id=l, name=l) if isinstance(l, str) else dict(l)
-            lanes.append(dict(id=l["id"], name=l.get("name", l["id"]), rows=1))
+            ln = dict(id=l["id"], name=l.get("name", l["id"]), rows=1)
+            if l.get("bounds"):
+                ln["bounds"] = l["bounds"]
+            lanes.append(ln)
             lane_of_pool[l["id"]] = pid
-        pools.append(dict(
+        entry = dict(
             id=pid,
             name=p.get("name", pid),
             process=p.get("process", "Process_" + pid),
             lanes=lanes,
-        ))
+        )
+        if p.get("bounds"):
+            entry["bounds"] = p["bounds"]
+        pools.append(entry)
 
     # Lane mặc định khi node không khai: lane đầu tiên
     first_lane = next((l["id"] for p in pools for l in p.get("lanes", [])), None)
@@ -342,7 +351,7 @@ def to_spec(brief: dict, source: str) -> dict:
     for n in nodes_in:
         lane = n["lane"]
         rows_per_lane[lane] = max(rows_per_lane.get(lane, 1), row[n["id"]] + 1)
-    # Artifact treo dưới phần tử chủ, nên lane phải chừa thêm một dòng cho nó - nếu
+    # Artifact treo dưới phần tử chủ, nên lane phải chừa thêm một dòng cho nó — nếu
     # không thì cái kho dữ liệu rơi ra ngoài khung lane.
     hosts_with_art = {f["target"] if f["source"] in {a["id"] for a in artifacts_in} else f["source"]
                       for f in flows_in if f.get("kind") in ("data", "association")}
@@ -368,11 +377,24 @@ def to_spec(brief: dict, source: str) -> dict:
             out["definition"] = n["definition"]
         if n.get("color"):
             out["color"] = n["color"]
+        for k in ("fill", "stroke"):
+            if n.get(k):
+                out[k] = n[k]
         if n.get("default"):
             out["default"] = n["default"]
         ms = markers_of(n)
         if ms:
             out["markers"] = ms
+        # Toạ độ có sẵn thì đi thẳng vào `build.py` và thắng bố cục tự động. Một `.yaml`
+        # do `bpmn2yaml` sinh ra sau khi chỉnh tay trong Modeler luôn mang theo chúng.
+        # `isMarkerVisible` của cổng loại trừ: Modeler cho bật/tắt dấu X, và đó là lựa
+        # chọn trình bày của người vẽ chứ không suy ra được từ cấu trúc.
+        if n.get("marker") and n.get("kind") == "gateway":
+            out["marker"] = True
+        if n.get("bounds"):
+            out["bounds"] = n["bounds"]
+        if n.get("label"):
+            out["label"] = n["label"]
         nodes.append(out)
 
     flows = []
@@ -384,7 +406,12 @@ def to_spec(brief: dict, source: str) -> dict:
             d["id"] = f["id"]
         if f.get("name"):
             d["name"] = f["name"]
-        if f.get("route"):
+        for k in ("label", "fill", "stroke"):
+            if f.get(k):
+                d[k] = f[k]
+        if f.get("waypoints"):
+            d["waypoints"] = f["waypoints"]
+        elif f.get("route"):
             d["route"] = f["route"]
         elif edges[i] and i in back:
             # Cung quay lui: vòng xuống dưới rồi trở về, đúng cách một modeler vẽ
@@ -402,6 +429,9 @@ def to_spec(brief: dict, source: str) -> dict:
                 m["name"] = f["name"]
             if f.get("offset"):
                 m["offset"] = f["offset"]
+            for k in ("waypoints", "label", "fill", "stroke"):
+                if f.get(k):
+                    m[k] = f[k]
             messages.append(m)
 
     # --- artifact và dây nối của chúng ---------------------------------------------
@@ -420,8 +450,11 @@ def to_spec(brief: dict, source: str) -> dict:
             art, host, direction = t, s, "output"
         else:
             continue
-        links.append(dict(id=f.get("id"), art=art, host=host,
-                          direction=direction, kind=f.get("kind")))
+        lk = dict(id=f.get("id"), art=art, host=host,
+                  direction=direction, kind=f.get("kind"))
+        if f.get("waypoints"):
+            lk["waypoints"] = f["waypoints"]
+        links.append(lk)
 
     host_of = {l["art"]: l["host"] for l in links}
     artifacts = []
@@ -434,6 +467,9 @@ def to_spec(brief: dict, source: str) -> dict:
         )
         if a.get("lane"):
             out["lane"] = a["lane"]
+        for k in ("bounds", "label", "fill", "stroke"):
+            if a.get(k):
+                out[k] = a[k]
         artifacts.append(out)
 
     orphan = [a["id"] for a in artifacts if a["host"] is None]
@@ -459,7 +495,7 @@ def to_spec(brief: dict, source: str) -> dict:
 def report_fit(spec: dict, text_width_mm: float = 174.0, font_units: float = 11.0) -> None:
     """Kích thước "đủ nhìn" là một quyết định, nên phải nói ra bằng số.
 
-    Không cố ép sơ đồ nhỏ nhất hay to nhất - chỉ báo cỡ chữ sẽ in ra và gợi ý lát cắt
+    Không cố ép sơ đồ nhỏ nhất hay to nhất — chỉ báo cỡ chữ sẽ in ra và gợi ý lát cắt
     khi nó rơi xuống dưới ngưỡng đọc được (6pt).
     """
     m = Model(spec)
@@ -496,10 +532,32 @@ def report_fit(spec: dict, text_width_mm: float = 174.0, font_units: float = 11.
         nm = names.get(lane, lane)
         print(f"    lane {nm:<18.18} {lw:7.0f} đv   {verdict(lw)}   ({cnt} node)")
 
-    print("  (số của lane là cận trên - `compact: true` còn nén được các dải trống)")
+    print("  (số của lane là cận trên — `compact: true` còn nén được các dải trống)")
     if pt < 6:
         print("  Gợi ý: cắt bằng bpmn-lane(M, \"<tên lane>\"), hoặc hẹp hơn nữa bằng")
-        print("         bpmn-part(M, (<id>, ..), lane: \"<tên lane>\") - xem docs/bpmn-workflow.md")
+        print("         bpmn-part(M, (<id>, ..), lane: \"<tên lane>\") — xem docs/bpmn-workflow.md")
+
+
+def report_pinning(spec: dict) -> None:
+    """Nói ra khi toạ độ trong file chỉ có một nửa.
+
+    Ghim toàn bộ thì đúng, không ghim gì cũng đúng. Ghim một nửa thì phần được ghim nằm
+    ở chỗ Modeler đặt, phần còn lại nằm ở chỗ lưới tính, và hai hệ toạ độ đó không biết
+    nhau: kết quả là hình chồng lấn mà không có gì báo. Đây đúng là loại lỗi im lặng mà
+    tài liệu của repo nói phải dừng lại và báo.
+    """
+    nodes = spec["nodes"]
+    pinned = [n for n in nodes if n.get("bounds")]
+    if pinned and len(pinned) != len(nodes):
+        loose = [n["id"] for n in nodes if not n.get("bounds")]
+        print(f"  [chú ý] {len(pinned)}/{len(nodes)} node có `bounds`, số còn lại được bố "
+              f"cục lại nên có thể chồng lên nhau: {', '.join(loose[:5])}"
+              + (" ..." if len(loose) > 5 else ""))
+    flows = spec.get("flows", [])
+    routed = [f for f in flows if f.get("waypoints")]
+    if routed and len(routed) != len(flows):
+        print(f"  [chú ý] {len(routed)}/{len(flows)} luồng có `waypoints`, số còn lại "
+              "được định tuyến lại")
 
 
 def main() -> int:
@@ -518,7 +576,7 @@ def main() -> int:
     if out == str(src):
         return print("bpmnbrief: cần -o, tên file không có hậu tố -brief") or 1
 
-    # Sửa những vi phạm máy sửa được, trước khi bố cục - chèn cổng làm đổi đồ thị nên
+    # Sửa những vi phạm máy sửa được, trước khi bố cục — chèn cổng làm đổi đồ thị nên
     # phải xong trước khi phân tầng.
     if not args.no_fix:
         brief, changes = normalize(brief)
@@ -526,6 +584,7 @@ def main() -> int:
             print(f"  [sửa] {c.detail}")
 
     spec = to_spec(brief, src.name)
+    report_pinning(spec)
     build(spec, out)
     report_fit(spec, text_width_mm=args.width)
 

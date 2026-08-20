@@ -10,6 +10,51 @@ from __future__ import annotations
 
 from xml.sax.saxutils import escape
 
+from ._version import __version__ as VERSION
+
+
+def edge_colors(f: dict) -> str:
+    """Thuộc tính màu cho một cạnh. Modeler tô màu được cả cạnh, không chỉ shape, và một
+    cung rework tô đỏ là thông tin thật chứ không phải trang trí."""
+    if not (f.get("fill") or f.get("stroke")):
+        return ""
+    stroke = f.get("stroke") or f.get("fill")
+    return f' bioc:stroke="{stroke}" color:border-color="{stroke}"'
+
+
+def edge_label_box(flow: dict, auto: dict) -> dict:
+    """Hộp nhãn của một cạnh: lấy cái người vẽ đặt nếu có, còn không thì lấy cái tự tính.
+
+    Nhãn cạnh là chỗ chỉnh tay nhiều thứ hai sau đường đi, vì bộ tính tự động luôn đặt
+    nó ở giữa cạnh, mà giữa cạnh thì hay đè lên một shape khác.
+    """
+    lab = flow.get("label")
+    if not lab:
+        return auto
+    return dict(x=float(lab["x"]), y=float(lab["y"]),
+                w=float(lab["w"]), h=float(lab["h"]))
+
+
+def coord(v: float) -> str:
+    """Toạ độ: số nguyên in không có phần lẻ, số lẻ thì giữ nguyên.
+
+    Trước đây mọi toạ độ đều `:.0f`, hợp lý khi mọi toạ độ đều do lưới sinh ra. Nhưng
+    Modeler đặt nhãn ở nửa đơn vị (`x="903.5"`), nên khi `bounds` đi thẳng từ file vào
+    thì làm tròn là *sửa* dữ liệu của người vẽ, và vòng lặp không còn bất biến.
+    """
+    return f"{v:.0f}" if abs(v - round(v)) < 1e-9 else f"{v:g}"
+
+
+def attr(text: str) -> str:
+    """Giá trị thuộc tính XML.
+
+    Xuống dòng phải mã hoá thành `&#10;`. Ký tự xuống dòng đặt trần trong một thuộc tính
+    là hợp lệ về cú pháp, nhưng bộ phân tích XML *chuẩn hoá giá trị thuộc tính* và biến
+    nó thành dấu cách, nên `name="Phân loại\nhướng xử lý"` đọc lại thành một dòng và
+    ngắt dòng người vẽ đặt biến mất sau mỗi vòng.
+    """
+    return escape(text).replace("\r\n", "&#10;").replace("\n", "&#10;").replace("\r", "&#10;")
+
 # --- kích thước chuẩn của BPMN (đơn vị BPMN, giống Camunda Modeler) ---
 TASK_W, TASK_H = 100, 80
 GW = 50
@@ -37,7 +82,9 @@ PALETTE = {
 # nằm ở đây vì nó là XML; từ vựng và phần kiểm tra thì ở `brief.py`.
 MARKER_ELEMENTS = {
     "loop": "<bpmn:standardLoopCharacteristics />",
-    "mi-parallel": '<bpmn:multiInstanceLoopCharacteristics isSequential="false" />',
+    # `isSequential` mặc định là false, nên Camunda ghi thẻ trần. Ghi giống hệt thì
+    # `git diff` giữa file mình sinh và file Modeler lưu lại chỉ còn phần thật sự đổi.
+    "mi-parallel": "<bpmn:multiInstanceLoopCharacteristics />",
     "mi-sequential": '<bpmn:multiInstanceLoopCharacteristics isSequential="true" />',
 }
 
@@ -61,6 +108,16 @@ def size_of(kind: str) -> tuple[int, int]:
     if kind == "textAnnotation":
         return NOTE_W, NOTE_H
     return TASK_W, TASK_H
+
+
+def _pin(node: dict, b: dict | None) -> None:
+    """Đặt một phần tử vào đúng hộp đã cho, và tính lại tâm theo hộp đó."""
+    if not b:
+        return
+    node["x"], node["y"] = float(b["x"]), float(b["y"])
+    node["w"], node["h"] = float(b["w"]), float(b["h"])
+    node["cx"] = node["x"] + node["w"] / 2
+    node["cy"] = node["y"] + node["h"] / 2
 
 
 class Model:
@@ -127,7 +184,34 @@ class Model:
             n["cy"] = n["y"] + h / 2
             n["pool"] = self.lane_of_pool[n["lane"]]
 
+        self.pin_given_bounds()
         self.place_artifacts()
+        self.pin_given_bounds(artifacts=True)
+
+    # -- toạ độ do người viết đưa vào -----------------------------------------
+    def pin_given_bounds(self, artifacts: bool = False) -> None:
+        """Ghi đè bố cục vừa tính bằng `bounds` có sẵn trong đặc tả.
+
+        Chạy *sau* khi tính, không phải thay cho việc tính: một file chỉ ghim vài phần
+        tử thì phần còn lại vẫn cần lưới, và làm theo thứ tự này thì đường không ghim gì
+        cho ra kết quả y hệt như trước.
+        """
+        if artifacts:
+            for a in self.artifacts.values():
+                _pin(a, a.get("bounds"))
+            return
+        for p in self.pools:
+            b = p.get("bounds")
+            if b:
+                self.pool_bounds[p["id"]] = dict(
+                    x=float(b["x"]), y=float(b["y"]), w=float(b["w"]), h=float(b["h"]))
+            for ln in p.get("lanes", []):
+                lb = ln.get("bounds")
+                if lb:
+                    self.lane_bounds[ln["id"]] = dict(
+                        x=float(lb["x"]), y=float(lb["y"]), w=float(lb["w"]), h=float(lb["h"]))
+        for n in self.nodes.values():
+            _pin(n, n.get("bounds"))
 
     def place_artifacts(self) -> None:
         """Artifact treo dưới phần tử chủ của nó.
@@ -157,6 +241,14 @@ class Model:
         if "waypoints" in flow:
             return flow["waypoints"]
         s, t = self.nodes[flow["src"]], self.nodes[flow["dst"]]
+        # Waypoint do người viết đưa vào thì thắng bộ định tuyến, không bàn. Đây là cùng
+        # một luật với `row`/`col`: cái gì tác giả nói tường minh thì máy không đoán lại.
+        # Đường đi của một cạnh là chỗ chỉnh tay nhiều nhất trong Modeler, mà trước đây
+        # `bpmn-brief` vẽ lại từ đầu, nên mỗi vòng lặp lại xoá đúng phần vừa chỉnh.
+        given = flow.get("waypoints")
+        if given:
+            return [(float(x), float(y)) for x, y in given]
+
         mode = flow.get("route", "auto")
         sc, tc = (s["cx"], s["cy"]), (t["cx"], t["cy"])
 
@@ -213,6 +305,9 @@ class Model:
     def message_route(self, m: dict) -> list[tuple[float, float]]:
         """Nối một node với pool black box. `offset` đẩy đoạn dọc sang khoảng
         trống giữa hai cột để không cắt ngang shape của lane ở giữa."""
+        given = m.get("waypoints")
+        if given:
+            return [(float(x), float(y)) for x, y in given]
         pb = self.pool_bounds
         node_id = m["dst"] if m["src"] in pb else m["src"]
         pool_id = m["src"] if m["src"] in pb else m["dst"]
@@ -248,21 +343,21 @@ class Model:
             ' xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"'
             ' xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"'
             f' id="{s["id"]}" targetNamespace="http://bpmn.io/schema/bpmn"'
-            ' exporter="build.py" exporterVersion="0.1.0">'
+            f' exporter="bpmn-generator" exporterVersion="{VERSION}">'
         )
 
         # --- collaboration ---
         A(f'  <bpmn:collaboration id="{s["collaboration"]}">')
         for p in self.pools:
             if p.get("blackbox"):
-                A(f'    <bpmn:participant id="{p["id"]}" name="{escape(p["name"])}" />')
+                A(f'    <bpmn:participant id="{p["id"]}" name="{attr(p["name"])}" />')
             else:
                 A(
-                    f'    <bpmn:participant id="{p["id"]}" name="{escape(p["name"])}"'
+                    f'    <bpmn:participant id="{p["id"]}" name="{attr(p["name"])}"'
                     f' processRef="{p["process"]}" />'
                 )
         for i, m in enumerate(self.messages, 1):
-            nm = f' name="{escape(m["name"])}"' if m.get("name") else ""
+            nm = f' name="{attr(m["name"])}"' if m.get("name") else ""
             A(
                 f'    <bpmn:messageFlow id="{self.msg_id(m, i)}"{nm}'
                 f' sourceRef="{m["src"]}" targetRef="{m["dst"]}" />'
@@ -277,7 +372,7 @@ class Model:
             A(f'  <bpmn:process id="{p["process"]}" isExecutable="false">')
             A(f'    <bpmn:laneSet id="LaneSet_{p["process"]}">')
             for ln in p["lanes"]:
-                A(f'      <bpmn:lane id="{ln["id"]}" name="{escape(ln["name"])}">')
+                A(f'      <bpmn:lane id="{ln["id"]}" name="{attr(ln["name"])}">')
                 for n in self.spec["nodes"]:
                     if n["lane"] == ln["id"]:
                         A(f'        <bpmn:flowNodeRef>{n["id"]}</bpmn:flowNodeRef>')
@@ -290,7 +385,7 @@ class Model:
                     continue
                 node = self.nodes[n["id"]]
                 kind = n["kind"]
-                nm = f' name="{escape(n["name"])}"' if n.get("name") else ""
+                nm = f' name="{attr(n["name"])}"' if n.get("name") else ""
                 inc = [f["src"] for f in self.flows if f["dst"] == n["id"]]
                 out = [f["dst"] for f in self.flows if f["src"] == n["id"]]
                 inc_ids = [self.flow_id(f) for f in self.flows if f["dst"] == n["id"]]
@@ -348,7 +443,7 @@ class Model:
             for f in self.flows:
                 if self.nodes[f["src"]]["pool"] != p["id"]:
                     continue
-                nm = f' name="{escape(f["name"])}"' if f.get("name") else ""
+                nm = f' name="{attr(f["name"])}"' if f.get("name") else ""
                 A(
                     f'    <bpmn:sequenceFlow id="{self.flow_id(f)}"{nm}'
                     f' sourceRef="{f["src"]}" targetRef="{f["dst"]}" />'
@@ -387,17 +482,37 @@ class Model:
             node = self.nodes[n["id"]]
             col = n.get("color")
             attrs = ""
-            if col:
+            # Màu hex tường minh (do Modeler đặt) thắng tên trong bảng màu: bảng chỉ là
+            # lối viết tắt cho vài màu quen, còn người vẽ thì chọn được bất kỳ màu nào.
+            if n.get("fill") or n.get("stroke"):
+                fill = n.get("fill", "#ffffff")
+                stroke = n.get("stroke", "#22242A")
+                attrs = (
+                    f' bioc:stroke="{stroke}" bioc:fill="{fill}"'
+                    f' color:background-color="{fill}" color:border-color="{stroke}"'
+                )
+            elif col:
                 fill, stroke = PALETTE[col]
                 attrs = (
                     f' bioc:stroke="{stroke}" bioc:fill="{fill}"'
                     f' color:background-color="{fill}" color:border-color="{stroke}"'
                 )
+            if n.get("marker") and n["kind"] == "exclusiveGateway":
+                attrs += ' isMarkerVisible="true"'
             A(
                 f'      <bpmndi:BPMNShape id="Shape_{n["id"]}" bpmnElement="{n["id"]}"{attrs}>'
             )
             A(self.bounds(node, 8))
-            if n["kind"] in EVENT_KINDS or n["kind"] in GATEWAY_KINDS:
+            lab = n.get("label")
+            if lab:
+                A("        <bpmndi:BPMNLabel>")
+                A(
+                    f'          <dc:Bounds x="{coord(float(lab["x"]))}"'
+                    f' y="{coord(float(lab["y"]))}" width="{coord(float(lab["w"]))}"'
+                    f' height="{coord(float(lab["h"]))}" />'
+                )
+                A("        </bpmndi:BPMNLabel>")
+            elif n["kind"] in EVENT_KINDS or n["kind"] in GATEWAY_KINDS:
                 if n.get("name"):
                     lw = 110
                     A("        <bpmndi:BPMNLabel>")
@@ -408,60 +523,64 @@ class Model:
                     A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNShape>")
         for a in self.artifacts.values():
-            A(f'      <bpmndi:BPMNShape id="Shape_{a["id"]}" bpmnElement="{a["id"]}">')
+            at = ""
+            if a.get("fill") or a.get("stroke"):
+                fill = a.get("fill", "#ffffff")
+                stroke = a.get("stroke", "#22242A")
+                at = (f' bioc:stroke="{stroke}" bioc:fill="{fill}"'
+                      f' color:background-color="{fill}" color:border-color="{stroke}"')
+            A(f'      <bpmndi:BPMNShape id="Shape_{a["id"]}" bpmnElement="{a["id"]}"{at}>')
             A(self.bounds(a, 8))
-            if a["kind"] in DATA_KINDS and a.get("name"):
+            if a.get("label") or (a["kind"] in DATA_KINDS and a.get("name")):
+                auto = dict(x=a["cx"] - 45, y=a["y"] + a["h"] + 6, w=90, h=14)
                 A("        <bpmndi:BPMNLabel>")
-                A(
-                    f'          <dc:Bounds x="{a["cx"] - 45:.0f}"'
-                    f' y="{a["y"] + a["h"] + 6:.0f}" width="90" height="14" />'
-                )
+                A(self.bounds(edge_label_box(a, auto), 10))
                 A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNShape>")
         for lk in self.links:
             a, host = self.artifacts[lk["art"]], self.nodes[lk["host"]]
             # Artifact luôn nằm dưới chủ của nó, nên hai điểm là đủ: đáy chủ, đỉnh artifact.
-            near = (host["cx"], host["y"] + host["h"])
-            far = (a["cx"], a["y"])
-            wps = [near, far] if lk["direction"] == "output" else [far, near]
+            given = lk.get("waypoints")
+            if given:
+                wps = [(float(x), float(y)) for x, y in given]
+            else:
+                near = (host["cx"], host["y"] + host["h"])
+                far = (a["cx"], a["y"])
+                wps = [near, far] if lk["direction"] == "output" else [far, near]
             A(
                 f'      <bpmndi:BPMNEdge id="Edge_{self.link_id(lk)}"'
                 f' bpmnElement="{self.link_id(lk)}">'
             )
             for (x, y) in wps:
-                A(f'        <di:waypoint x="{x:.0f}" y="{y:.0f}" />')
+                A(f'        <di:waypoint x="{coord(x)}" y="{coord(y)}" />')
             A("      </bpmndi:BPMNEdge>")
         for f in self.flows:
             wps = self.route(f)
             A(
                 f'      <bpmndi:BPMNEdge id="Edge_{self.flow_id(f)}"'
-                f' bpmnElement="{self.flow_id(f)}">'
+                f' bpmnElement="{self.flow_id(f)}"{edge_colors(f)}>'
             )
             for (x, y) in wps:
-                A(f'        <di:waypoint x="{x:.0f}" y="{y:.0f}" />')
-            if f.get("name"):
-                lx, ly = self.edge_label(wps)
+                A(f'        <di:waypoint x="{coord(x)}" y="{coord(y)}" />')
+            if f.get("label") or f.get("name"):
                 A("        <bpmndi:BPMNLabel>")
-                A(
-                    f'          <dc:Bounds x="{lx:.0f}" y="{ly:.0f}"'
-                    ' width="90" height="24" />'
-                )
+                lx, ly = self.edge_label(wps)
+                auto = dict(x=lx, y=ly, w=90, h=24)
+                A(self.bounds(edge_label_box(f, auto), 10))
                 A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNEdge>")
         for i, m in enumerate(self.messages, 1):
             wps = self.message_route(m)
             mid = self.msg_id(m, i)
-            A(f'      <bpmndi:BPMNEdge id="Edge_{mid}" bpmnElement="{mid}">')
+            A(f'      <bpmndi:BPMNEdge id="Edge_{mid}" bpmnElement="{mid}"{edge_colors(m)}>')
             for (x, y) in wps:
-                A(f'        <di:waypoint x="{x:.0f}" y="{y:.0f}" />')
-            if m.get("name"):
+                A(f'        <di:waypoint x="{coord(x)}" y="{coord(y)}" />')
+            if m.get("label") or m.get("name"):
                 lx = (wps[0][0] + wps[-1][0]) / 2
                 ly = (wps[0][1] + wps[-1][1]) / 2
+                auto = dict(x=lx + 6, y=ly - 10, w=100, h=20)
                 A("        <bpmndi:BPMNLabel>")
-                A(
-                    f'          <dc:Bounds x="{lx + 6:.0f}" y="{ly - 10:.0f}"'
-                    ' width="100" height="20" />'
-                )
+                A(self.bounds(edge_label_box(m, auto), 10))
                 A("        </bpmndi:BPMNLabel>")
             A("      </bpmndi:BPMNEdge>")
         A("    </bpmndi:BPMNPlane>")
@@ -499,8 +618,8 @@ class Model:
     def bounds(b: dict, indent: int) -> str:
         pad = " " * indent
         return (
-            f'{pad}<dc:Bounds x="{b["x"]:.0f}" y="{b["y"]:.0f}"'
-            f' width="{b["w"]:.0f}" height="{b["h"]:.0f}" />'
+            f'{pad}<dc:Bounds x="{coord(b["x"])}" y="{coord(b["y"])}"'
+            f' width="{coord(b["w"])}" height="{coord(b["h"])}" />'
         )
 
 

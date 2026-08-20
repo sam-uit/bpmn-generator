@@ -22,7 +22,7 @@ Dùng như thư viện:
     findings = rules.check(rules.load_bpmn("model.bpmn"))
 """
 
-__version__ = "0.4.0"
+from ._version import __version__  # noqa: F401
 
 from . import brief, build, convert, ids, lint, rotate, rules  # noqa: F401
 
