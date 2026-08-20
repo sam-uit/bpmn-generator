@@ -2,6 +2,20 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.2
+
+**CONTRIBUTING.md, and English as a rule**
+
+The conventions this repository follows were, until now, held in one person's head and in a memory file outside the repository. A clone did not carry them. [`CONTRIBUTING.md`](../CONTRIBUTING.md) writes them down: language, naming, punctuation, Markdown source, changelog, dependencies, and what to run before committing. Each rule carries the reason it is a rule, because a convention with no stated reason reads as taste, and taste is negotiable at three in the morning when something needs to ship.
+
+**English only**, from 2026-08-20, for documentation, comments, docstrings, argparse help, and every string this package prints to a user. Existing Vietnamese prose is a scheduled backlog, translated in one planned pass rather than piecemeal, because a half-translated file costs the reader more than a consistently Vietnamese one.
+
+One exception is written into the rule: **id slugs stay Vietnamese without diacritics**. `task-user-lap-ke-hoach` is not English prose that was left untranslated, it is the name of a real process step, and translating it would break every `bpmn-span` reference in the consuming report. The grammar that produces those slugs is [`docs/naming.md`](naming.md) and it is unaffected.
+
+The **dependency** section states the two things that are invisible from inside any single file here. The version number lives only in `src/bpmn_generator/_version.py`, which both `__init__` and `build` import, so the `exporterVersion` stamped into a generated `.bpmn` cannot drift from the installed package; `pyproject.toml` carries the same number and is the one copy updated by hand. And typst-bpmn's CI installs this package from GitHub pinned to a **tag**, so a release is invisible downstream until it is pushed and tagged, and a change to `bpmn2yaml`'s output can move typst-bpmn's golden manifest. The pin is a tag rather than a branch precisely so that move is a decision somebody made.
+
+The **before committing** section also corrects the README, which still named one test file from the days when there was one. There are four now, 68 assertions, and they are plain scripts: `PYTHONPATH=src python3 tests/<file>.py` runs them with no test-runner dependency.
+
 ## v0.5.1
 
 **Quy ước viết áp cho code base, và bốn tham chiếu chết**

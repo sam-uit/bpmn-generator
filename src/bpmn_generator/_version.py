@@ -9,4 +9,4 @@ Trước đây `exporterVersion` là chuỗi `"0.1.0"` gõ cứng và đứng y�
 tức là nó nói sai chứ không phải nói thiếu.
 """
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"

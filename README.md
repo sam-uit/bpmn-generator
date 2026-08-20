@@ -105,13 +105,14 @@ Cùng tinh thần, `bpmn-id` không tự rút gọn một nhãn mười âm ti�
 - [`docs/workflow.md`](docs/workflow.md), quy trình: brief một lần, `.yaml` nhiều lần, cái gì giữ được qua mỗi vòng và cái gì không
 - [`docs/naming.md`](docs/naming.md), quy ước id: khuôn, bảng từ khoá và viết tắt đầy đủ, và quy trình đổi tên hàng loạt
 - [`docs/rules.md`](docs/rules.md), luật well-formed: cái gì bắt, cái gì tự sửa, và vì sao
+- [`CONTRIBUTING.md`](CONTRIBUTING.md), quy ước của repo: ngôn ngữ, đặt tên, changelog, phụ thuộc, và việc phải chạy trước khi commit
 
 ## Cài đặt và phát triển
 
 ```bash
-uv sync                     # môi trường phát triển
-uv run bpmn-lint <file>     # chạy thẳng từ repo
-python3 tests/test_ids.py   # 24 khẳng định cho quy ước id
+uv sync                                          # môi trường phát triển
+uv run bpmn-lint <file>                          # chạy thẳng từ repo
+for t in tests/*.py; do PYTHONPATH=src python3 "$t"; done   # 68 khẳng định
 ```
 
 Dùng từ một dự án khác, khai path dependency, để sửa thư viện là dự án thấy ngay:
