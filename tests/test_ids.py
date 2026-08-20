@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Kiểm thử `bpmn_generator.ids` — chạy: python3 -m pytest tests/  (hoặc: python3 tests/test_ids.py)
+"""Kiểm thử `bpmn_generator.ids`: chạy: python3 -m pytest tests/  (hoặc: python3 tests/test_ids.py)
 
 Không dùng pytest: repo này không có hạ tầng test Python, mà quy ước đặt id thì cần
 một lưới an toàn ngay bây giờ. Mỗi khẳng định dưới đây tương ứng một quyết định thiết
-kế trong `docs/bpmn-naming.md` — sửa quy ước thì phải sửa cả ở đây, và đó là chủ ý.
+kế trong `docs/naming.md`: sửa quy ước thì phải sửa cả ở đây, và đó là chủ ý.
 """
 
 from bpmn_generator import ids as B
@@ -81,7 +81,7 @@ eq(m["A"].startswith("task-kiem-tra-") and m["B"].startswith("task-kiem-tra-"), 
 eq(m, B.rename_map({"nodes": [
     {"id": "A", "kind": "task", "name": "Kiểm tra"},
     {"id": "B", "kind": "task", "name": "Kiểm tra"},
-]}), "băm tất định — chạy lại cho cùng kết quả, không sinh diff giả")
+]}), "băm tất định: chạy lại cho cùng kết quả, không sinh diff giả")
 
 
 def main() -> int:

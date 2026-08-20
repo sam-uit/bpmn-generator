@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Quy ước đặt id cho phần tử BPMN — sinh, kiểm tra, và đổi tên hàng loạt.
+"""Quy ước đặt id cho phần tử BPMN, sinh, kiểm tra, và đổi tên hàng loạt.
 
     python3 tools/ids.py <file>-brief.yaml            # kiểm tra, in bảng đối chiếu
     python3 tools/ids.py <file>-brief.yaml --rename    # ghi id mới vào chính file đó
     python3 tools/ids.py <file>-brief.yaml --rename \\
         --also content/chapter03.md content/analysis/*.yaml   # sửa luôn chỗ tham chiếu
 
-Vì sao cần: id là thứ **người khác** phải gõ lại — trong `bpmn-part(...)`, trong khoá
+Vì sao cần: id là thứ **người khác** phải gõ lại, trong `bpmn-span(from:, to:)`, trong khoá
 `node:` của `whywhy`, trong `bpmn-span(from:, to:)`. Một id nói được nó là cái gì thì
 người viết chương không phải mở file mô hình ra tra. Ba mục tiêu, đúng thứ tự ưu tiên:
 
-    1. duy nhất   — hai phần tử không bao giờ trùng id
-    2. nhất quán  — cùng một loại thì cùng một khuôn, không có ngoại lệ
-    3. tường minh — đọc id biết ngay loại, phân loại con, và tên
+    1. duy nhất  : hai phần tử không bao giờ trùng id
+    2. nhất quán : cùng một loại thì cùng một khuôn, không có ngoại lệ
+    3. tường minh: đọc id biết ngay loại, phân loại con, và tên
 
-Khuôn (xem `docs/bpmn-naming.md`):
+Khuôn (xem `docs/naming.md`):
 
     <type>-<subtype>-<subsubtype>-<name>[-<hash>]
 
@@ -26,7 +26,7 @@ Khuôn (xem `docs/bpmn-naming.md`):
 Ô nào không có thì **bỏ hẳn**, không để chỗ trống: `task-lap-ke-hoach` (task thường)
 chứ không phải `task-none-lap-ke-hoach`. Ô trống là chỗ để sai chính tả nảy sinh.
 
-Viết tắt chỉ xuất hiện ở **đúng một chỗ**: hai ô loại của id luồng. Lý do là độ dài —
+Viết tắt chỉ xuất hiện ở **đúng một chỗ**: hai ô loại của id luồng. Lý do là độ dài,
 `flow-gateway-task-...` dài mà không nói thêm gì. Mọi chỗ khác viết đủ chữ, vì id được
 đọc nhiều hơn được gõ. Bảng viết tắt vẫn nhận ở đầu vào (`evt`, `gwy`, `tsk`…) và được
 mở ra thành chữ đủ khi sinh id.
@@ -49,7 +49,7 @@ except ImportError:  # pragma: no cover
 
 # --- từ vựng ---------------------------------------------------------------------------
 # Viết tắt -> chữ đủ. Sắp theo bảng chữ cái để tra bằng mắt được; xem bảng đầy đủ kèm
-# nghĩa trong `docs/bpmn-naming.md`.
+# nghĩa trong `docs/naming.md`.
 SHORTHANDS: dict[str, str] = {
     "bdr": "boundary",
     "cal": "call",
@@ -89,7 +89,7 @@ SHORTHANDS: dict[str, str] = {
 }
 FULL_TO_SHORT: dict[str, str] = {v: k for k, v in SHORTHANDS.items()}
 
-# Ô 1 — loại phần tử. Đây là tập đóng: thêm loại mới thì thêm ở đây, không đặt tuỳ ý.
+# Ô 1: loại phần tử. Đây là tập đóng: thêm loại mới thì thêm ở đây, không đặt tuỳ ý.
 TYPES = {
     "event", "task", "subprocess", "gateway", "flow", "message",
     "participant", "lane", "process", "definitions", "collaboration",
@@ -110,7 +110,7 @@ SUBTYPES: dict[str, set[str] | None] = {
     "collaboration": None,
 }
 
-# Ô 3 — chỉ sự kiện và cổng dựa-trên-sự-kiện mới có: bắt/ném bằng cái gì.
+# Ô 3: chỉ sự kiện và cổng dựa-trên-sự-kiện mới có: bắt/ném bằng cái gì.
 EVENT_DEFINITIONS = {
     "message", "timer", "signal", "error", "escalation",
     "conditional", "compensation", "link", "terminate",
@@ -144,14 +144,14 @@ def slugify(text: str) -> str:
     return t
 
 
-# Ô tên dài bao nhiêu là vừa? id được **gõ lại bằng tay** — trong `bpmn-part(..)`, trong
+# Ô tên dài bao nhiêu là vừa? id được **gõ lại bằng tay**, trong `bpmn-span(..)`, trong
 # khoá `node:` của whywhy, trong `bpmn-span(from:, to:)`. Nhãn đầy đủ của một task
 # ("Lập bản thảo kế hoạch và dự trù kinh phí") quá dài để làm id.
 #
 # Nhưng máy **không cắt bừa**. Chọn ba âm tiết nào đại diện cho một nhãn mười âm tiết
 # chính là *đặt tên*, mà đặt tên thì vượt ranh giới tự động hoá của repo: máy chỉ làm
 # những gì không cần đặt tên. Cắt máy móc cho ra `task-user-lap-ban-thao-ke-hoach-va`
-# — cụt ở một hư từ, tệ hơn cả id cũ.
+#: cụt ở một hư từ, tệ hơn cả id cũ.
 #
 # Nên: nhãn quá dài thì báo ID-LONG và **dừng**, chờ người viết khai `slug:` trong brief:
 #
@@ -162,13 +162,13 @@ MAX_WORDS = 5
 
 
 def short_slug(text: str, max_words: int = MAX_WORDS) -> tuple[str, bool]:
-    """(slug, có quá dài không). Quá dài thì trả nguyên vẹn — người gọi quyết định."""
+    """(slug, có quá dài không). Quá dài thì trả nguyên vẹn, người gọi quyết định."""
     words = [w for w in slugify(text).split("-") if w]
     return "-".join(words), len(words) > max_words
 
 
 def _hash6(seed: str) -> str:
-    """Hậu tố phân biệt khi trùng id. Băm tất định — cùng đầu vào cho cùng kết quả,
+    """Hậu tố phân biệt khi trùng id. Băm tất định, cùng đầu vào cho cùng kết quả,
     nếu không thì mỗi lần chạy lại sinh ra một diff giả."""
     return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:6]
 
@@ -176,7 +176,7 @@ def _hash6(seed: str) -> str:
 # --- sinh id ---------------------------------------------------------------------------
 def make_id(type_: str, name: str, subtype: str = "", subsub: str = "",
             suffix: str = "", slug: str = "") -> str:
-    """`slug` khai tay thì thắng — cùng nguyên tắc với `row`/`col` trong brief."""
+    """`slug` khai tay thì thắng: cùng nguyên tắc với `row`/`col` trong brief."""
     parts = [expand(type_)]
     if subtype:
         parts.append(expand(subtype))
@@ -194,7 +194,7 @@ def node_id(node: dict) -> str:
     """id chuẩn cho một node của brief. Trả chuỗi rỗng khi node **không có tên**.
 
     Không có tên thì không có gì để đặt vào ô tên, và máy không được phép tự nghĩ ra
-    một cái — đúng ranh giới tự động hoá của repo: máy chỉ sửa những gì không cần đặt
+    một cái, đúng ranh giới tự động hoá của repo: máy chỉ sửa những gì không cần đặt
     tên, cái gì cần đặt tên thì dừng lại và báo. `bpmnrules` đã có W-GW-NAME cho đúng
     trường hợp hay gặp nhất (cổng không tên).
     """
@@ -230,7 +230,7 @@ def flow_id(kind: str, src: dict | None, tgt: dict | None, name: str,
     """`flow-gwy-tsk-du-ngan-sach`.
 
     Nhãn luồng là thứ đáng đưa vào id nhất (nó nói *điều kiện*), nhưng luồng thường
-    không có nhãn — khi đó lấy tên node đích, vì "chảy tới đâu" là thông tin còn lại.
+    không có nhãn: khi đó lấy tên node đích, vì "chảy tới đâu" là thông tin còn lại.
     """
     label = name or fallback
     # Không đi qua `make_id`: nó mở viết tắt ra chữ đủ, mà id luồng là đúng chỗ duy
@@ -263,11 +263,11 @@ def parse(eid: str) -> dict | None:
 
 # --- kiểm tra và đổi tên ---------------------------------------------------------------
 def with_slugs(brief: dict, slugs: dict | None) -> dict:
-    """Trộn bảng {id: slug} khai ngoài vào brief — dùng cho mô hình chỉ có `.bpmn`
+    """Trộn bảng {id: slug} khai ngoài vào brief, dùng cho mô hình chỉ có `.bpmn`
     (dựng từ spec Python), vì XML không có chỗ khai `slug:` như brief.
 
     Trộn **một lần ở đầu vào** rồi mọi hàm phía sau chỉ thấy một dạng dữ liệu: nếu để
-    mỗi hàm tự trộn thì `no_name` và `too_long` sẽ nhìn thấy hai thế giới khác nhau —
+    mỗi hàm tự trộn thì `no_name` và `too_long` sẽ nhìn thấy hai thế giới khác nhau,
     đúng lỗi đã mắc lần đầu.
     """
     if not slugs:
@@ -279,15 +279,15 @@ def with_slugs(brief: dict, slugs: dict | None) -> dict:
 
 
 def no_name(brief: dict) -> list[str]:
-    """id của những phần tử không có tên — máy dừng lại ở đây, không tự đặt."""
+    """id của những phần tử không có tên, máy dừng lại ở đây, không tự đặt."""
     # Kiểm thẳng `name`, không đi qua `node_id`: `node_id` cũng trả rỗng cho nhãn quá
-    # dài, mà đó là ID-LONG chứ không phải ID-NONAME — hai chuyện, hai cách xử lý.
+    # dài, mà đó là ID-LONG chứ không phải ID-NONAME, hai chuyện, hai cách xử lý.
     return [n["id"] for n in brief.get("nodes", [])
             if not slugify(n.get("name", "")) and not slugify(n.get("slug", ""))]
 
 
 def too_long(brief: dict, slugs: dict | None = None) -> list[tuple[str, str]]:
-    """[(id, slug đề nghị rút gọn từ)] — nhãn dài quá cap và chưa khai `slug:`."""
+    """[(id, slug đề nghị rút gọn từ)], nhãn dài quá cap và chưa khai `slug:`."""
     out = []
     for n in brief.get("nodes", []):
         if n.get("slug") or (slugs or {}).get(n["id"]):
@@ -340,7 +340,7 @@ def rename_map(brief: dict, stem: str = "", slugs: dict | None = None) -> dict[s
         if slugify(fid.split("-", 3)[-1] if fid.count("-") >= 3 else ""):
             proposed[f["id"]] = fid
 
-    # duy nhất — mục tiêu số 1, nên nó thắng cả tính ngắn gọn
+    # duy nhất: mục tiêu số 1, nên nó thắng cả tính ngắn gọn
     seen: dict[str, list[str]] = {}
     for old, new in proposed.items():
         seen.setdefault(new, []).append(old)
@@ -348,7 +348,7 @@ def rename_map(brief: dict, stem: str = "", slugs: dict | None = None) -> dict[s
         if len(olds) <= 1:
             continue
         # Hạt giống băm là (id mới, thứ tự khai báo), KHÔNG phải id cũ. Nếu băm theo id
-        # cũ thì chạy `--rename` lần thứ hai sẽ ra hậu tố khác — id vừa đổi xong đã trở
+        # cũ thì chạy `--rename` lần thứ hai sẽ ra hậu tố khác, id vừa đổi xong đã trở
         # thành "id cũ" mới. Đã dính đúng lỗi đó một lần.
         for i, old in enumerate(olds):
             proposed[old] = f"{new}-{_hash6(f'{new}|{i}')}"
@@ -356,18 +356,18 @@ def rename_map(brief: dict, stem: str = "", slugs: dict | None = None) -> dict[s
 
 
 def check(brief: dict, stem: str = "", slugs: dict | None = None) -> list[tuple[str, str, str]]:
-    """[(mã, id, mô tả)] — mã: ID-SHAPE (sai khuôn) | ID-STALE (đúng khuôn, sai nội dung)."""
+    """[(mã, id, mô tả)]: mã: ID-SHAPE (sai khuôn) | ID-STALE (đúng khuôn, sai nội dung)."""
     # Trộn slug NGAY Ở ĐÂY chứ không để từng hàm tự lo: `no_name` không nhận `slugs`,
     # nên nếu quên bước này thì lint báo ID-NONAME cho phần tử đã có slug trong sidecar.
     brief = with_slugs(brief, slugs)
     out: list[tuple[str, str, str]] = []
     for nid, full in too_long(brief, slugs):
         out.append(("ID-LONG", nid,
-                    f"nhãn dài hơn {MAX_WORDS} âm tiết (`{full}`) — khai `slug:` "
+                    f"nhãn dài hơn {MAX_WORDS} âm tiết (`{full}`), khai `slug:` "
                     "trong brief để tự chọn cách rút gọn"))
     for nid in no_name(brief):
         out.append(("ID-NONAME", nid,
-                    "phần tử không có `name` nên không đặt id tường minh được — "
+                    "phần tử không có `name` nên không đặt id tường minh được, "
                     "đặt tên cho nó, hoặc khai `slug:` nếu cố ý để trống nhãn trên hình"))
     for old, new in rename_map(brief, stem, slugs).items():
         if old == new:
@@ -477,7 +477,7 @@ def sidecar_slugs(path: pathlib.Path) -> dict:
 
 
 def load_any(path: pathlib.Path) -> dict:
-    """Nhận cả `-brief.yaml` lẫn `.bpmn` — cùng một quy ước, hai nguồn."""
+    """Nhận cả `-brief.yaml` lẫn `.bpmn`: cùng một quy ước, hai nguồn."""
     if path.suffix.lower() == ".bpmn":
         return brief_from_bpmn(path)
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -491,7 +491,7 @@ def main() -> int:
     ap.add_argument("--rename", action="store_true", help="ghi id mới vào file brief")
     ap.add_argument("--also", nargs="*", default=[],
                     help="file khác cũng chứa id (chương .md, .yaml phân tích, .bpmn)")
-    ap.add_argument("--slugs", help="file YAML {id cũ: slug ngắn} — cho mô hình chỉ có .bpmn")
+    ap.add_argument("--slugs", help="file YAML {id cũ: slug ngắn}, cho mô hình chỉ có .bpmn")
     ap.add_argument("--propose-slugs", metavar="FILE",
                     help="ghi ra khuôn {id: slug} cho mọi nhãn quá dài, để sửa tay rồi dùng lại")
     ap.add_argument("--strict", action="store_true", help="thoát khác 0 khi còn id lệch")
@@ -506,14 +506,14 @@ def main() -> int:
     brief = with_slugs(brief, slugs)
 
     if args.propose_slugs:
-        lines = [f"# {path.name} — sửa vế phải cho gọn rồi dùng lại với --slugs",
+        lines = [f"# {path.name}: sửa vế phải cho gọn rồi dùng lại với --slugs",
                  "# Máy chỉ chép nguyên nhãn xuống đây; RÚT GỌN LÀ VIỆC CỦA NGƯỜI VIẾT.", ""]
         for nid, full in too_long(brief, slugs):
             name = next((n.get("name", "") for n in brief.get("nodes", []) if n["id"] == nid), "")
             lines.append(f"# {name}")
             lines.append(f"{nid}: {full}")
         for nid in no_name(brief):
-            lines.append("# (không có nhãn — đặt tên trên hình, hoặc chọn slug ở đây)")
+            lines.append("# (không có nhãn: đặt tên trên hình, hoặc chọn slug ở đây)")
             lines.append(f"{nid}: ")
         pathlib.Path(args.propose_slugs).write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"-> {args.propose_slugs} ({len(too_long(brief, slugs)) + len(no_name(brief))} mục)")
@@ -523,7 +523,7 @@ def main() -> int:
 
     long_ = too_long(brief, slugs)
     if long_:
-        print(f"{path}: {len(long_)} nhãn dài hơn {MAX_WORDS} âm tiết — khai `slug:` "
+        print(f"{path}: {len(long_)} nhãn dài hơn {MAX_WORDS} âm tiết, khai `slug:` "
               f"trong brief rồi chạy lại:")
         for nid, full in long_:
             print(f"  ~ {nid}  ({full})")
@@ -531,7 +531,7 @@ def main() -> int:
 
     blank = no_name(brief)
     if blank:
-        print(f"{path}: {len(blank)} phần tử không có tên — máy không đặt id thay được:")
+        print(f"{path}: {len(blank)} phần tử không có tên, máy không đặt id thay được:")
         for b in blank:
             print(f"  ? {b}")
         print()

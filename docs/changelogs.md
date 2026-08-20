@@ -2,6 +2,19 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.1
+
+**Quy ước viết áp cho code base, và bốn tham chiếu chết**
+
+62 chỗ dùng em-dash trong docstring, chú thích và **chuỗi in ra cho người dùng**. Thay theo nghĩa chứ không máy móc thành dấu phẩy: nối hai mệnh đề độc lập thì thành chấm phẩy, gắn một nhãn hoặc mở một lời giải thích thì thành hai chấm.
+
+Bốn tham chiếu chết lộ ra trong lúc quét, và cả bốn đều nằm trong chữ người dùng đọc rồi gõ theo:
+
+- `bpmn-brief` in gợi ý "cắt bằng `bpmn-lane(M, ..)`, hoặc hẹp hơn nữa bằng `bpmn-part(M, ..)`". **Cả hai hàm đều không tồn tại** bên typst-bpmn. Đúng là `bpmn-figure(M, view: (lane: ..))` và `bpmn-span(M, from:, to:)`.
+- Cùng dòng đó trỏ tới `docs/bpmn-workflow.md`, cũng không tồn tại. Ba đường dẫn tài liệu cũ (`bpmn-rules.md`, `bpmn-naming.md`, `bpmn-workflow.md`) còn nằm rải trong `brief.py`, `ids.py`, `rules.py`, `test_ids.py` và `docs/naming.md`, từ hồi tách repo khỏi báo cáo. Nay trỏ đúng `docs/rules.md`, `docs/naming.md`, `docs/workflow.md`.
+
+Bốn bộ test xanh, không đổi hành vi nào.
+
 ## v0.5.0
 
 **Vòng lặp cải tiến giữ đúng thứ người vẽ đã chỉnh** `#bug` `#high`

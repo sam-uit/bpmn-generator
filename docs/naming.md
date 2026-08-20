@@ -3,18 +3,9 @@
 id của một phần tử BPMN không phải chuyện nội bộ của file mô hình: nó là thứ **người viết phải gõ lại bằng tay**.
 
 ```typ
-#bpmn-part(M,
-    (
-      "gateway-exclusive-phan-loai-huong-xu-ly",
-      "task-send-gui-hang-ve-hang"
-    ),
-    lane: "Kỹ Thuật Viên"
-)
-#bpmn-span(
-  M,
-  from: "task-user-kiem-ton-kho",
-  to: "task-user-cap-phat-linh-kien"
-)
+#bpmn-span(M, from: "gateway-exclusive-phan-loai-huong-xu-ly", to: "task-send-gui-hang-ve-hang",
+           lane: "Kỹ Thuật Viên")
+#bpmn-span(M, from: "task-user-kiem-ton-kho", to: "task-user-cap-phat-linh-kien")
 ```
 
 ```yaml
@@ -71,7 +62,7 @@ definitions-l03-management-ke-hoach-khuyen-mai    cấp file: lấy tên file
 
 Ba id **cấp file** (`definitions`, `collaboration`, `process`) lấy *tên file* làm ô tên, không lấy tiêu đề quy trình: chúng không bao giờ bị gõ lại trong hàm, mà tên file thì đã ngắn, đã duy nhất trong repo, và mở ra là khớp ngay.
 
-Cùng lý do, id của **pool và lane** không bị chặn 5 âm tiết: hàm gọi lát cắt bằng *tên hiển thị* (`bpmn-lane(M, "Kho Vật Tư")`), không bằng id. Chỉ những id thật sự bị gõ lại: task, event, gateway, mới phải ngắn.
+Cùng lý do, id của **pool và lane** không bị chặn 5 âm tiết: hàm gọi lát cắt bằng *tên hiển thị* (`bpmn-figure(M, view: (lane: "Kho Vật Tư"))`), không bằng id. Chỉ những id thật sự bị gõ lại: task, event, gateway, mới phải ngắn.
 
 ## Bảng từ khoá
 
@@ -79,8 +70,8 @@ Cùng lý do, id của **pool và lane** không bị chặn 5 âm tiết: hàm g
 
 | Từ khoá | Viết tắt | Phần tử BPMN |
 | --- | --- | --- |
-| `collaboration` | — | `<collaboration>`: khung chứa các pool |
-| `definitions` | — | `<definitions>`: gốc của file |
+| `collaboration` | (không có) | `<collaboration>`: khung chứa các pool |
+| `definitions` | (không có) | `<definitions>`: gốc của file |
 | `event` | `evt` | `startEvent`, `intermediateCatch/ThrowEvent`, `endEvent`, `boundaryEvent` |
 | `flow` | `flw` `seq` | `sequenceFlow` |
 | `gateway` | `gwy` | mọi loại cổng |
@@ -109,7 +100,7 @@ Cùng lý do, id của **pool và lane** không bị chặn 5 âm tiết: hàm g
 | `call` | `cal` | `callActivity`: gọi quy trình khác |
 | `manual` | `man` | Việc tay, không có hệ thống hỗ trợ |
 | `receive` | `rcv` | Chờ nhận message |
-| `rule` | `rul` | `businessRuleTask` — quyết định theo luật/DMN |
+| `rule` | `rul` | `businessRuleTask`, quyết định theo luật/DMN |
 | `script` | `scr` | Script chạy trong engine |
 | `send` | `snd` | Gửi message |
 | `service` | `svc` | Hệ thống tự thực hiện |
@@ -222,7 +213,7 @@ bpmn-id content/processes/<ten>-brief.yaml --rename \
 bpmn-brief <ten> && just report
 ```
 
-`--also` là chỗ dễ sai nhất: quên một file thì file đó còn giữ id cũ, và Typst **không báo lỗi**, `bpmn-part` với id không tồn tại chỉ đơn giản là bỏ qua phần tử đó. Sau khi đổi tên, luôn mở PDF xem hình còn đủ phần tử không.
+`--also` là chỗ dễ sai nhất: quên một file thì file đó còn giữ id cũ, và Typst **không báo lỗi**, `bpmn-span` với id không tồn tại chỉ đơn giản là bỏ qua phần tử đó. Sau khi đổi tên, luôn mở PDF xem hình còn đủ phần tử không.
 
 ## Kiểm ở đâu
 

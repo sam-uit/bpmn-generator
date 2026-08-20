@@ -368,7 +368,7 @@ class Model:
         for p in self.pools:
             if p.get("blackbox"):
                 continue
-            # Mô hình trong báo cáo là để đọc, không để chạy — nói rõ ra
+            # Mô hình trong báo cáo là để đọc, không để chạy, nói rõ ra
             A(f'  <bpmn:process id="{p["process"]}" isExecutable="false">')
             A(f'    <bpmn:laneSet id="LaneSet_{p["process"]}">')
             for ln in p["lanes"]:
@@ -398,7 +398,7 @@ class Model:
                 if n.get("definition"):
                     d = n["definition"]
                     body.append(f'      <bpmn:{d}EventDefinition id="Def_{n["id"]}" />')
-                # Data association là con của chính activity, không phải của process —
+                # Data association là con của chính activity, không phải của process,
                 # đó là lý do nó phải chèn ở đây chứ không ở vòng lặp cạnh phía dưới.
                 for lk in self.links:
                     if lk["host"] != n["id"] or lk.get("kind") != "data":

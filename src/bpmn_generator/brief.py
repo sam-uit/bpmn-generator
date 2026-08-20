@@ -18,7 +18,7 @@ Người viết vẫn thắng máy: khai `row`/`col` cho node nào thì node đ�
 
 Trước khi bố cục, brief được `tools/rules.normalize()` sửa những vi phạm well-formed
 mà máy sửa được mà không cần đặt tên: chèn cổng hợp lưu, đặt nhánh mặc định. Mọi thay đổi
-đều được in ra. Tắt bằng `--no-fix`. Xem `docs/bpmn-rules.md`.
+đều được in ra. Tắt bằng `--no-fix`. Xem `docs/rules.md`.
 
 Toạ độ tuyệt đối, bề rộng cột, định tuyến cạnh và BPMNDI do `build.py` lo, script
 này chỉ trả lời câu hỏi "cái gì nằm ở ô lưới nào".
@@ -175,7 +175,7 @@ def element_of(n: dict) -> str:
     hint = {
         "subprocess": "gỡ subprocess ra thành một mô hình riêng, hoặc giữ file .bpmn "
                       "làm nguồn sự thật cho mô hình này",
-        "group": "bỏ group khỏi .yaml, group chỉ là khung trang trí, vẽ lại trong Modeler",
+        "group": "bỏ group khỏi .yaml: group chỉ là khung trang trí, vẽ lại trong Modeler",
     }.get(kind)
     tail = f"\n  {hint}" if hint else ""
     raise SystemExit(f"bpmn-brief: chưa hỗ trợ kind '{kind}' (node {n.get('id')}){tail}")
@@ -534,8 +534,11 @@ def report_fit(spec: dict, text_width_mm: float = 174.0, font_units: float = 11.
 
     print("  (số của lane là cận trên, `compact: true` còn nén được các dải trống)")
     if pt < 6:
-        print("  Gợi ý: cắt bằng bpmn-lane(M, \"<tên lane>\"), hoặc hẹp hơn nữa bằng")
-        print("         bpmn-part(M, (<id>, ..), lane: \"<tên lane>\"), xem docs/bpmn-workflow.md")
+        # Tên hàm và tên file phải đúng: đây là dòng người dùng đọc rồi gõ theo.
+        # Bản cũ chỉ tới `bpmn-lane` và `bpmn-part`, hai hàm không tồn tại bên
+        # typst-bpmn, và tới `docs/workflow.md`, cũng không tồn tại.
+        print("  Gợi ý: cắt bằng bpmn-figure(M, view: (lane: \"<tên lane>\")), hoặc hẹp")
+        print("         hơn nữa bằng bpmn-span(M, from: <id>, to: <id>). Xem docs/workflow.md")
 
 
 def report_pinning(spec: dict) -> None:
@@ -591,7 +594,7 @@ def main() -> int:
     # Những gì còn lại là lỗi mô hình hoá, người phải sửa
     rest = [f for f in check(load_brief(brief)) if f.level == "error"]
     if rest:
-        print(f"  {len(rest)} lỗi còn lại (xem docs/bpmn-rules.md):")
+        print(f"  {len(rest)} lỗi còn lại (xem docs/rules.md):")
         for f in rest:
             print(f"    ✗ [{f.code}] {f.node}: {f.message}")
     return 0

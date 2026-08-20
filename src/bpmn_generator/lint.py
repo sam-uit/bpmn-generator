@@ -47,9 +47,9 @@ def lint(path: pathlib.Path) -> tuple[int, int]:
 
     head = f"{path}: {len(g.nodes)} node, {len(g.flows)} luồng"
     if not findings and not id_findings:
-        print(f"{head} - sạch")
+        print(f"{head}: sạch")
         return 0, 0
-    print(f"{head} - {len(errors)} lỗi, {len(warns)} cảnh báo, {len(id_findings)} id lệch")
+    print(f"{head}: {len(errors)} lỗi, {len(warns)} cảnh báo, {len(id_findings)} id lệch")
     for f in errors + warns:
         print(f"  {ICON[f.level]} [{f.code}] {f.node}: {f.message}")
         if f.hint:
@@ -74,7 +74,7 @@ def main() -> int:
         total_e += e
         total_w += w
     if args.strict and total_e:
-        print(f"\n{total_e} lỗi - không đạt.", file=sys.stderr)
+        print(f"\n{total_e} lỗi, không đạt.", file=sys.stderr)
         return 1
     return 0
 

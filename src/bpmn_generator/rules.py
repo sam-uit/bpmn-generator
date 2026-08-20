@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Luật well-formed cho mô hình BPMN — kiểm tra và sửa tự động.
+"""Luật well-formed cho mô hình BPMN: kiểm tra và sửa tự động.
 
 Tách riêng khỏi `build.py` (toạ độ) và `brief.py` (bố cục) vì đây là chuyện
 **cấu trúc**, không liên quan gì tới chỗ đặt phần tử. Trộn vào sẽ làm cả ba khó đọc.
@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 
 # --- mô hình đồ thị chuẩn hoá ----------------------------------------------------------
 GATEWAYS = {"exclusive", "parallel", "inclusive", "event"}
-# Cổng "rẽ theo điều kiện" — chỉ những loại này mới cần nhánh mặc định
+# Cổng "rẽ theo điều kiện": chỉ những loại này mới cần nhánh mặc định
 CONDITIONAL_GATEWAYS = {"exclusive", "inclusive"}
 
 
@@ -78,7 +78,7 @@ def load_brief(brief: dict) -> Graph:
     for n in brief.get("nodes", []):
         # Artifact (kho dữ liệu, ghi chú) được vẽ nhưng không nằm trên dòng chảy: không
         # có token đi qua. Đưa vào đồ thị thì mọi luật "phải có luồng vào/ra" đều báo
-        # nhầm — `load_bpmn` cũng bỏ qua chúng, hai bên phải nói cùng một thứ.
+        # nhầm: `load_bpmn` cũng bỏ qua chúng, hai bên phải nói cùng một thứ.
         if n.get("kind") in ("data", "annotation", "group"):
             continue
         g.nodes[n["id"]] = Node(
@@ -187,7 +187,7 @@ def reconvergence(g: Graph, split: str, back: set[str] | None = None) -> str | N
 
     **Không đi qua cạnh quay lui.** Một nhánh rework quay về đầu quy trình thì rồi cũng
     tới được mọi thứ phía sau; tính vào sẽ báo nhầm một cổng bất kỳ ở xa là "điểm đóng".
-    Nhánh nào chỉ vòng lại thì coi như không có điểm hợp lưu — và đúng là nó không có.
+    Nhánh nào chỉ vòng lại thì coi như không có điểm hợp lưu, và đúng là nó không có.
     """
     if back is None:
         back = back_edges(g)
@@ -227,7 +227,7 @@ def check(g: Graph) -> list[Finding]:
     for nid, n in g.nodes.items():
         inc, outs = g.inc(nid), g.out(nid)
 
-        # R1 — không cho gộp ngầm: nhiều luồng vào phải đi qua một cổng
+        # R1: không cho gộp ngầm: nhiều luồng vào phải đi qua một cổng
         if len(inc) > 1 and n.kind != "gateway":
             out.append(Finding(
                 "E-MERGE", "error", nid,
@@ -235,7 +235,7 @@ def check(g: Graph) -> list[Finding]:
                 "Chèn một cổng hợp lưu trước nó; `just bpmn-brief` tự làm việc này.",
             ))
 
-        # R2 — cổng rẽ theo điều kiện phải có nhánh mặc định (happy path)
+        # R2: cổng rẽ theo điều kiện phải có nhánh mặc định (happy path)
         if n.kind == "gateway" and n.gateway in CONDITIONAL_GATEWAYS and len(outs) > 1:
             if not n.default:
                 out.append(Finding(
@@ -248,7 +248,7 @@ def check(g: Graph) -> list[Finding]:
                     "E-DEFAULT", "error", nid,
                     f"Nhánh mặc định `{n.default}` không phải là một nhánh ra của cổng này", ""))
 
-        # R3 — mở bằng cổng nào thì đóng bằng cổng đó
+        # R3: mở bằng cổng nào thì đóng bằng cổng đó
         if n.kind == "gateway" and len(outs) > 1:
             join = reconvergence(g, nid, back)
             if join and g.is_gateway(join):
@@ -261,7 +261,7 @@ def check(g: Graph) -> list[Finding]:
                         "(parallel đóng bằng exclusive) hoặc nhân bản (ngược lại).",
                     ))
 
-        # R4 — nhánh ra của cổng rẽ điều kiện phải có nhãn là câu trả lời
+        # R4: nhánh ra của cổng rẽ điều kiện phải có nhãn là câu trả lời
         if n.kind == "gateway" and n.gateway in CONDITIONAL_GATEWAYS and len(outs) > 1:
             for f in outs:
                 if not f[3]:
@@ -277,7 +277,7 @@ def check(g: Graph) -> list[Finding]:
                     "Đặt tên cổng là một câu hỏi, ví dụ `Còn hạn bảo hành?`.",
                 ))
 
-        # R5 — sự kiện đầu/cuối và node cụt
+        # R5: sự kiện đầu/cuối và node cụt
         if n.kind == "event" and n.event == "start" and inc:
             out.append(Finding("E-START-IN", "error", nid, "Sự kiện bắt đầu có luồng vào", ""))
         if n.kind == "event" and n.event == "end" and outs:
@@ -292,18 +292,18 @@ def check(g: Graph) -> list[Finding]:
             out.append(Finding(
                 "E-NO-IN", "error", nid, f"{_label(n)} không có luồng vào", ""))
 
-    # R6 — message flow phải chạm vào task hoặc sự kiện, không chạm vào cổng
+    # R6: message flow phải chạm vào task hoặc sự kiện, không chạm vào cổng
     for mid, s, t in g.messages:
         for end in (s, t):
             if g.is_gateway(end):
                 out.append(Finding(
                     "E-MSG-GATEWAY", "error", end,
                     f"Message flow `{mid}` nối thẳng vào một cổng",
-                    "Chèn một sự kiện bắt thông điệp (`definition: message`) trước cổng — "
+                    "Chèn một sự kiện bắt thông điệp (`definition: message`) trước cổng, "
                     "cổng chỉ định tuyến, nó không nhận được thông điệp.",
                 ))
 
-    # R7 — mọi node phải tới được từ một sự kiện bắt đầu
+    # R7: mọi node phải tới được từ một sự kiện bắt đầu
     starts = [i for i, n in g.nodes.items() if n.kind == "event" and n.event == "start"]
     if starts:
         seen = set(starts)
@@ -341,7 +341,7 @@ def normalize(brief: dict) -> tuple[dict, list[Change]]:
     Cụ thể: chèn cổng hợp lưu (cổng hợp lưu không có tên nên không cần hỏi ai), và đặt
     nhánh mặc định cho cổng rẽ điều kiện.
 
-    Không tự sửa: message flow chạm vào cổng — sửa đúng phải chèn một sự kiện bắt thông
+    Không tự sửa: message flow chạm vào cổng, sửa đúng phải chèn một sự kiện bắt thông
     điệp, mà sự kiện thì cần một cái tên, và chỉ người viết mới biết đặt tên gì.
     """
     changes: list[Change] = []
@@ -367,8 +367,8 @@ def normalize(brief: dict) -> tuple[dict, list[Change]]:
 
         # Loại cổng hợp lưu phải khớp với cổng đã mở ra các nhánh này (R3).
         kind = _closing_kind(g, [f[1] for f in inc])
-        # id của cổng chèn thêm cũng phải theo quy ước (docs/bpmn-naming.md). Cổng hợp
-        # lưu không có nhãn, nên ô tên lấy theo *node nó đứng trước* — đó đúng là cách
+        # id của cổng chèn thêm cũng phải theo quy ước (docs/naming.md). Cổng hợp
+        # lưu không có nhãn, nên ô tên lấy theo *node nó đứng trước*, đó đúng là cách
         # người đọc gọi nó: "cổng hợp lưu trước bước X".
         from . import ids  # cục bộ: rules là tầng dưới, không nên phụ thuộc vòng
         base = (ids.parse(nid) or {}).get("name", "") or nid.split("_", 1)[-1]
@@ -411,7 +411,7 @@ def _closing_kind(g: Graph, sources: list[str]) -> str:
 
     Đi ngược từ mỗi nguồn tới cổng rẽ gần nhất; nếu tất cả cùng chỉ về một cổng thì lấy
     loại của cổng đó (song song đóng bằng song song). Không xác định được thì dùng
-    exclusive — đúng cho vòng rework và cho các nhánh loại trừ.
+    exclusive: đúng cho vòng rework và cho các nhánh loại trừ.
     """
     kinds = set()
     for s in sources:
