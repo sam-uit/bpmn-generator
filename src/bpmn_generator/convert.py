@@ -195,6 +195,16 @@ class Converter:
             if shape is None:
                 continue
             entry: dict[str, Any] = {"id": pid, "name": p.get("name", "") or ""}
+            # State what kind of participant this is instead of leaving it to be
+            # inferred downstream. One that carries a processRef owns a process; one
+            # that does not is a collapsed black box. Writing both out is what stops
+            # `bpmn-brief` from having to guess from the presence of lanes, a guess that
+            # read a real single-role pool (a process with no lane set) as a black box
+            # and moved all of its nodes into another pool.
+            if p.get("processRef"):
+                entry["process"] = p.get("processRef")
+            else:
+                entry["blackbox"] = True
             entry["horizontal"] = shape.get("isHorizontal", "true") != "false"
             entry["bounds"] = bounds_of(shape)
             entry.update(colors_of(shape))

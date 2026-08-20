@@ -307,10 +307,19 @@ def to_spec(brief: dict, source: str) -> dict:
     lane_of_pool = {}
     for p in pools_in:
         pid = p["id"]
-        # Một participant không có lane và không chứa node nào là black box, dù file
-        # nguồn không nói thẳng. Đây là chỗ `.yaml` chuyển đổi ngược quay lại được:
-        # `bpmn2yaml` không ghi `blackbox`, nó chỉ đơn giản không ghi `lanes`.
-        if p.get("blackbox") or not p.get("lanes"):
+        # A participant states its own kind and that statement wins: `process:` means it
+        # owns a process, `blackbox: true` means it is collapsed. The lane heuristic is
+        # the last resort, for a hand-written brief that says neither, and it is only a
+        # heuristic: a real pool with a single role owns a process and declares no lane,
+        # so reading "no lanes" as "collapsed" silently dropped its process and moved its
+        # nodes into another pool's first lane.
+        if p.get("blackbox") is not None:
+            is_blackbox = bool(p["blackbox"])
+        elif p.get("process"):
+            is_blackbox = False
+        else:
+            is_blackbox = not p.get("lanes")
+        if is_blackbox:
             bb = dict(id=pid, name=p.get("name", pid), blackbox=True)
             if p.get("bounds"):
                 bb["bounds"] = p["bounds"]
@@ -324,6 +333,15 @@ def to_spec(brief: dict, source: str) -> dict:
                 ln["bounds"] = l["bounds"]
             lanes.append(ln)
             lane_of_pool[l["id"]] = pid
+        if not lanes:
+            # A process with no lane set is legitimate BPMN and the ordinary shape of a
+            # single-role pool. Give it one implicit band, keyed by the pool's own id so
+            # no invented id can collide with a real one, purely so the layout has a
+            # rectangle to place nodes in. `implicit` keeps it out of the XML: a file that
+            # arrived with no laneSet leaves with no laneSet, which is what keeps the
+            # improvement loop byte-identical.
+            lanes = [dict(id=pid, name=p.get("name", pid), rows=1, implicit=True)]
+            lane_of_pool[pid] = pid
         entry = dict(
             id=pid,
             name=p.get("name", pid),
@@ -334,10 +352,16 @@ def to_spec(brief: dict, source: str) -> dict:
             entry["bounds"] = p["bounds"]
         pools.append(entry)
 
-    # Lane mặc định khi node không khai: lane đầu tiên
-    first_lane = next((l["id"] for p in pools for l in p.get("lanes", [])), None)
+    # Default band for a node that names no lane: the first band of the pool it says it
+    # belongs to, and only then the first band of the model. A node in a pool with no lane
+    # set names a `pool:` and no `lane:`, so reaching straight for the first band of the
+    # model would drop it into whichever pool happens to be listed first, which is how
+    # nodes used to migrate between pools on a round trip.
+    first_band_of_pool = {p["id"]: p["lanes"][0]["id"] for p in pools if p.get("lanes")}
+    first_band = next((l["id"] for p in pools for l in p.get("lanes", [])), None)
     for n in nodes_in:
-        n.setdefault("lane", first_lane)
+        if not n.get("lane"):
+            n["lane"] = first_band_of_pool.get(n.get("pool")) or first_band
 
     ids = [n["id"] for n in nodes_in]
     seq = [f for f in flows_in if f.get("kind", "sequence") == "sequence"]
@@ -465,6 +489,11 @@ def to_spec(brief: dict, source: str) -> dict:
             kind=element_of(a),
             host=host_of.get(a["id"]),
         )
+        # An artifact can be shared by two hosts in two different pools, and then the host
+        # cannot decide which process owns it. Whatever the file states wins, exactly as
+        # `bounds` and `waypoints` do.
+        if a.get("pool"):
+            out["pool"] = a["pool"]
         if a.get("lane"):
             out["lane"] = a["lane"]
         for k in ("bounds", "label", "fill", "stroke"):

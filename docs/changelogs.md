@@ -2,6 +2,32 @@
 
 Mỗi version được tag ghi một mục ở đây. Mục TODO nào hoàn thành thì chuyển từ [`TODO.md`](TODO.md) sang đây, ở version phát hành nó.
 
+## v0.5.4
+
+**A pool without a lane is a pool, not a black box**
+
+`bpmn2yaml` wrote neither `process:` nor `blackbox:`, so `bpmn-brief` had to guess which participants were collapsed, and it guessed from the absence of `lanes:`. A participant that owns a process and declares no lane set is ordinary BPMN and the usual shape of a single-role pool. Every one of them was read as a black box: the pool lost its process, and every node it owned was moved into the first lane of whichever pool happened to be listed first.
+
+The damage was not subtle and it was sitting in this repository's own fixtures. `samples/b04-btvn01.bpmn` has two real participants; it came back out with one, and half the model relocated. `tests/fixtures/two-blackboxes.bpmn` did not come back out at all, it crashed with `KeyError: None`, because the nodes of the flattened pool ended up with no lane to be placed in.
+
+The fix is the same principle the coordinates already follow: **what the file states wins over what the algorithm infers.**
+
+- `convert.py` states the kind. A participant with a `processRef` gets `process: <id>`, one without gets `blackbox: true`. Nothing is left to be deduced downstream.
+- `brief.py` trusts the statement. `blackbox:` decides if present, `process:` decides next, and the lane heuristic survives only for a hand-written brief that says neither.
+- A real pool with no lane set gets **one implicit band**, keyed by the pool's own id so no invented id can collide, purely so the layout has a rectangle to place nodes in. It is marked `implicit` and never written to XML, so a file that arrived with no laneSet leaves with no laneSet. When the pool's bounds are pinned, the band follows them rather than staying on the computed grid.
+
+Two smaller faults surfaced on the way and both are the same shape, an inference beating a statement:
+
+**The default band ignored the node's own pool.** A node in a laneless pool names a `pool:` and no `lane:`, and `brief.py` reached straight for the first band in the model. It now takes the first band *of the pool the node names*, and only then falls back. This is what let nodes migrate between pools on a round trip.
+
+**An artifact could not stay in its own pool.** `place_artifacts` gave every artifact its host's pool. A data object shared by two tasks in two different pools therefore followed whichever host was recorded, not the pool it was declared in. An artifact that states `pool:` now keeps it, exactly as `bounds` and `waypoints` do.
+
+Measured on the fixtures rather than asserted: `b04-btvn01` now round-trips with no node moving pool, and the only remaining differences are the gateway `bpmn-brief` deliberately inserts to fix a rule violation, and one known limitation filed below. `vertical-pools` differs by exactly one key, `horizontal`, which is the open vertical-mode item.
+
+**`tests/test_roundtrip.py`** gains six assertions on a two-pool document where one pool declares no lane: the process survives, both processes are written, no laneSet is invented, no node changes pool, and the pool comes back byte-identical.
+
+**Filed, not fixed**, both found by running the fixtures through: a text annotation attached to a *sequence flow* is dropped along with its associations, and a model with no pool at all still crashes. Both are in [`TODO.md`](TODO.md) with a reproducer.
+
 ## v0.5.3
 
 **Message flow routing: three shapes instead of one, and the `KeyError` that hid behind explicit waypoints**

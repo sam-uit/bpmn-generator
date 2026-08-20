@@ -211,6 +211,15 @@ class Model:
                 if lb:
                     self.lane_bounds[ln["id"]] = dict(
                         x=float(lb["x"]), y=float(lb["y"]), w=float(lb["w"]), h=float(lb["h"]))
+                elif ln.get("implicit") and b:
+                    # An implicit band has no bounds of its own to pin, and leaving it on
+                    # the computed grid while its pool moved to pinned coordinates would
+                    # place every unpinned node in the wrong place. It is the pool minus
+                    # the header strip, which is exactly what a lane rectangle is.
+                    pb = self.pool_bounds[p["id"]]
+                    self.lane_bounds[ln["id"]] = dict(
+                        x=pb["x"] + POOL_HEADER, y=pb["y"],
+                        w=pb["w"] - POOL_HEADER, h=pb["h"])
         for n in self.nodes.values():
             _pin(n, n.get("bounds"))
 
@@ -234,7 +243,7 @@ class Model:
             a["y"] = host["y"] + host["h"] + ARTIFACT_GAP
             a["cx"] = a["x"] + w / 2
             a["cy"] = a["y"] + h / 2
-            a["pool"] = host["pool"]
+            a["pool"] = a.get("pool") or host["pool"]
             a["lane"] = a.get("lane") or host["lane"]
 
     # -- định tuyến cạnh ------------------------------------------------------
@@ -465,14 +474,19 @@ class Model:
                 continue
             # Mô hình trong báo cáo là để đọc, không để chạy, nói rõ ra
             A(f'  <bpmn:process id="{p["process"]}" isExecutable="false">')
-            A(f'    <bpmn:laneSet id="LaneSet_{p["process"]}">')
-            for ln in p["lanes"]:
-                A(f'      <bpmn:lane id="{ln["id"]}" name="{attr(ln["name"])}">')
-                for n in self.spec["nodes"]:
-                    if n["lane"] == ln["id"]:
-                        A(f'        <bpmn:flowNodeRef>{n["id"]}</bpmn:flowNodeRef>')
-                A("      </bpmn:lane>")
-            A("    </bpmn:laneSet>")
+            # An implicit band is a placeholder the layout needs, not a lane the author
+            # drew, so it is never written out. A pool whose only band is implicit gets no
+            # laneSet at all, which is both legal BPMN and what the source file said.
+            drawn_lanes = [ln for ln in p["lanes"] if not ln.get("implicit")]
+            if drawn_lanes:
+                A(f'    <bpmn:laneSet id="LaneSet_{p["process"]}">')
+                for ln in drawn_lanes:
+                    A(f'      <bpmn:lane id="{ln["id"]}" name="{attr(ln["name"])}">')
+                    for n in self.spec["nodes"]:
+                        if n["lane"] == ln["id"]:
+                            A(f'        <bpmn:flowNodeRef>{n["id"]}</bpmn:flowNodeRef>')
+                    A("      </bpmn:lane>")
+                A("    </bpmn:laneSet>")
 
             own = {n["id"] for n in self.nodes.values() if n["pool"] == p["id"]}
             for n in self.spec["nodes"]:
@@ -566,6 +580,8 @@ class Model:
             A(self.bounds(b, 8))
             A("      </bpmndi:BPMNShape>")
             for ln in p.get("lanes", []):
+                if ln.get("implicit"):
+                    continue
                 lb = self.lane_bounds[ln["id"]]
                 A(
                     f'      <bpmndi:BPMNShape id="Shape_{ln["id"]}" bpmnElement="{ln["id"]}"'
