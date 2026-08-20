@@ -3,9 +3,18 @@
 id của một phần tử BPMN không phải chuyện nội bộ của file mô hình: nó là thứ **người viết phải gõ lại bằng tay**.
 
 ```typ
-#bpmn-part(M, ("gateway-exclusive-phan-loai-huong-xu-ly", "task-send-gui-hang-ve-hang"),
-           lane: "Kỹ Thuật Viên")
-#bpmn-span(M, from: "task-user-kiem-ton-kho", to: "task-user-cap-phat-linh-kien")
+#bpmn-part(M,
+    (
+      "gateway-exclusive-phan-loai-huong-xu-ly",
+      "task-send-gui-hang-ve-hang"
+    ),
+    lane: "Kỹ Thuật Viên"
+)
+#bpmn-span(
+  M,
+  from: "task-user-kiem-ton-kho",
+  to: "task-user-cap-phat-linh-kien"
+)
 ```
 
 ```yaml
